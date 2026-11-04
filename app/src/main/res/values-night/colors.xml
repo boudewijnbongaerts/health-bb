@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark: ui/theme HbColors.FallbackDark; default rings unchanged (mid of c0 → c1), tracks at 20 %. -->
+    <color name="hb_widget_bg">#FF12120D</color>
+    <color name="hb_widget_card">#FF1C1C16</color>
+    <color name="hb_widget_text">#FFE5E3D6</color>
+    <color name="hb_widget_muted">#FFC6C7B5</color>
+    <color name="hb_widget_track">#FF35352C</color>
+    <color name="hb_ring_cal">#FFD78243</color>
+    <color name="hb_ring_zone">#FF42A778</color>
+    <color name="hb_ring_steps">#FFFFBB3B</color>
+    <color name="hb_ring_cal_track">#33BC6128</color>
+    <color name="hb_ring_zone_track">#3325845E</color>
+    <color name="hb_ring_steps_track">#33FFA21A</color>
+</resources>

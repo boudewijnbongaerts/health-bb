@@ -1,0 +1,25 @@
+# Build output and IDE
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+
+# Never commit apps, keys or personal data
+*.apk
+*.aab
+*.jks
+*.keystore
+*.db
+*.db-*
+*.sqlite
+*.zip
+*.log
+build-log.txt
+qa-shots/
+docs-private/
+*-private/

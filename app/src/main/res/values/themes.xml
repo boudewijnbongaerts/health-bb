@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window / launch background = the app's light surface (DESIGN §2 fallback), so the system splash and the first
+         frame match before Compose draws. Dark values live in values-night/themes.xml. MainActivity then refines it to
+         the Material You surface of the saved theme. -->
+    <style name="Theme.HealthBoud" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">#FFFBF9F1</item>
+        <item name="android:windowSplashScreenBackground">#FFFBF9F1</item>
+    </style>
+</resources>

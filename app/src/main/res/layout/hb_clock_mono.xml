@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2 Health BB · Clock, font "Mono" (D21). System family monospace; the date in caps, spaced, accent colour.
+     Sizes, margins, colours and gravity are set in code (widget/ClockViews.kt) from ClockLayout; the box is placed by
+     DashboardWidget so that the digits sit on the rings' centre line. includeFontPadding=false: the box is ascent + descent. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/hb_clock_root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="start|top">
+    <TextClock android:id="@+id/hb_clock_time" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="hh:mm" android:format24Hour="HH:mm" android:fontFamily="monospace" android:textColor="#FFFFFFFF" android:textSize="44dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+    <TextClock android:id="@+id/hb_clock_date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="EEE dd MMM" android:format24Hour="EEE dd MMM" android:fontFamily="monospace" android:textAllCaps="true" android:letterSpacing="0.18" android:textColor="#F2FFFFFF" android:textSize="14dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+</LinearLayout>

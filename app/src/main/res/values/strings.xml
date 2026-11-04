@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v4.1 R4: launcher label -->
+    <string name="app_name">Health BB</string>
+    <!-- V2 (D12) widget picker: exactly two entries, see widget/WidgetKind.kt -->
+    <string name="widget_slot1_label">Health BB</string>
+    <string name="widget_slot1_description">Your tiles, any size</string>
+    <string name="widget_rings_label">Health BB · Clock</string>
+    <string name="widget_rings_description">Clock, date and today\'s rings</string>
+    <!-- Hidden from the picker (placed widgets only, migrated to Health BB); labels show in launcher lists of placed widgets -->
+    <string name="widget_slot2_label">Health BB</string>
+    <string name="widget_slot3_label">Health BB</string>
+    <string name="widget_weekly_label">Health BB</string>
+    <string name="widget_cardio_label">Health BB</string>
+    <string name="widget_recent_label">Health BB</string>
+    <string name="widget_workouts_label">Health BB</string>
+    <string name="widget_slot2_description">Your tiles, any size</string>
+    <string name="widget_slot3_description">Your tiles, any size</string>
+    <string name="widget_weekly_description">Your tiles, any size</string>
+    <string name="widget_cardio_description">Your tiles, any size</string>
+    <string name="widget_recent_description">Your tiles, any size</string>
+    <string name="widget_workouts_description">Your tiles, any size</string>
+    <!-- kept for older references -->
+    <string name="widget_description">Your Health BB tiles from Health Connect.</string>
+</resources>

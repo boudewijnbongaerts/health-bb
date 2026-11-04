@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_rings_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewLayout="@layout/hb_widget_preview_rings"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:configure="com.boudhealth.widget.RingsClockSetup"
+    android:widgetFeatures="reconfigurable"
+    android:widgetCategory="home_screen" />

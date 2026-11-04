@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_slot1_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewLayout="@layout/hb_widget_preview_slot_wide"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:minResizeWidth="60dp"
+    android:minResizeHeight="60dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:configure="com.boudhealth.widget.WidgetSetupActivity"
+    android:widgetFeatures="reconfigurable"
+    android:widgetCategory="home_screen" />

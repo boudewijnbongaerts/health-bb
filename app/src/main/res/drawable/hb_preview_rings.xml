@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview: the three Today rings (Copper · Pine · Marigold, colours in values*/colors.xml), 80 / 66 / 88 %. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp" android:height="100dp"
+    android:viewportWidth="100" android:viewportHeight="100">
+    <path android:strokeColor="@color/hb_ring_cal_track" android:strokeWidth="10" android:fillColor="#00000000"
+        android:pathData="M50,6 a44,44 0 1,1 0,88 a44,44 0 1,1 0,-88" />
+    <path android:strokeColor="@color/hb_ring_zone_track" android:strokeWidth="10" android:fillColor="#00000000"
+        android:pathData="M50,18 a32,32 0 1,1 0,64 a32,32 0 1,1 0,-64" />
+    <path android:strokeColor="@color/hb_ring_steps_track" android:strokeWidth="10" android:fillColor="#00000000"
+        android:pathData="M50,30 a20,20 0 1,1 0,40 a20,20 0 1,1 0,-40" />
+    <path android:strokeColor="@color/hb_ring_cal" android:strokeWidth="10" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M50,6 A44,44 0 1,1 8.15,36.4" />
+    <path android:strokeColor="@color/hb_ring_zone" android:strokeWidth="10" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M50,18 A32,32 0 1,1 23.0,67.15" />
+    <path android:strokeColor="@color/hb_ring_steps" android:strokeWidth="10" android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M50,30 A20,20 0 1,1 36.31,35.42" />
+</vector>

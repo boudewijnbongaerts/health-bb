@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2 Health BB · Clock, font "Serif" (D21). System family serif; the date in italic.
+     Sizes, margins, colours and gravity are set in code (widget/ClockViews.kt) from ClockLayout; the box is placed by
+     DashboardWidget so that the digits sit on the rings' centre line. includeFontPadding=false: the box is ascent + descent. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/hb_clock_root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="start|top">
+    <TextClock android:id="@+id/hb_clock_time" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="h:mm" android:format24Hour="H:mm" android:fontFamily="serif" android:textColor="#FFFFFFFF" android:textSize="44dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+    <TextClock android:id="@+id/hb_clock_date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="EEEE, d MMMM" android:format24Hour="EEEE, d MMMM" android:fontFamily="serif" android:textStyle="italic" android:textColor="#F2FFFFFF" android:textSize="14dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+</LinearLayout>

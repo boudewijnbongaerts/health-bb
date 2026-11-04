@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget picker previews only. Mirror the app's fallback light tokens (ui/theme HbColors.FallbackLight) and the
+         default Copper · Pine · Marigold rings after the app's OKLCH light rule (RingLight.adjust; copper and pine already pass), tracks at 32 %. -->
+    <color name="hb_widget_bg">#FFEDEBDF</color>          <!-- bgDim -->
+    <color name="hb_widget_card">#FFFBF9F1</color>        <!-- card -->
+    <color name="hb_widget_text">#FF1C1C16</color>        <!-- text -->
+    <color name="hb_widget_muted">#FF5F5F52</color>       <!-- muted -->
+    <color name="hb_widget_track">#FFE7E5DA</color>       <!-- tileHi -->
+    <!-- ring index 0 = workout minutes (Copper), 1 = weekly intensity (Pine), 2 = steps (Marigold); v4 P-RINGS -->
+    <color name="hb_ring_cal">#FFBC6128</color>
+    <color name="hb_ring_zone">#FF25845E</color>
+    <color name="hb_ring_steps">#FFD77920</color>  <!-- Marigold start after RingLight.adjust (end CA9E47) -->
+    <color name="hb_ring_cal_track">#52BC6128</color>
+    <color name="hb_ring_zone_track">#5225845E</color>
+    <color name="hb_ring_steps_track">#52D77920</color>
+</resources>

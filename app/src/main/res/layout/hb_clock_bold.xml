@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- V2 Health BB · Clock, font "Bold" (D21). System family sans-serif-condensed, bold; hours above minutes, minutes in the accent colour; date in bundled Inter Medium (T4 res/font).
+     Sizes, margins, colours and gravity are set in code (widget/ClockViews.kt) from ClockLayout; the box is placed by
+     DashboardWidget so that the digits sit on the rings' centre line. includeFontPadding=false: the box is ascent + descent. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/hb_clock_root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="start|top">
+    <TextClock android:id="@+id/hb_clock_time" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="hh" android:format24Hour="HH" android:fontFamily="sans-serif-condensed" android:textStyle="bold" android:textColor="#FFFFFFFF" android:textSize="44dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+    <TextClock android:id="@+id/hb_clock_min" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="mm" android:format24Hour="mm" android:fontFamily="sans-serif-condensed" android:textStyle="bold"
+        android:textColor="#FFFF9F6E" android:textSize="44dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+    <TextClock android:id="@+id/hb_clock_date" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:format12Hour="EEE d MMM" android:format24Hour="EEE d MMM" android:fontFamily="@font/inter_medium" android:textAllCaps="true" android:letterSpacing="0.12" android:textColor="#F2FFFFFF" android:textSize="14dp" android:maxLines="1"
+        android:includeFontPadding="false" android:shadowColor="#66000000" android:shadowRadius="6" android:shadowDy="1" />
+</LinearLayout>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark twin of values/themes.xml: the dark surface (DESIGN §2 fallback #1C1C16) for the window and launch splash.
+         The per-app night mode (set from Settings › Theme) selects this folder too. -->
+    <style name="Theme.HealthBoud" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">#FF1C1C16</item>
+        <item name="android:windowSplashScreenBackground">#FF1C1C16</item>
+    </style>
+</resources>

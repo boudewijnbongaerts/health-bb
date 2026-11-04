@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Read only. Health BB never writes, changes or deletes health data. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <!-- v4 (optional): resting burn for the calories split -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+
+    <!-- Apple Health import: runs as a foreground job (dataSync) with a progress notification, so it survives screen-off -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Renpho Smart Tape over Bluetooth LE (no location use) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+        <!-- v4 (Q16): resolve the names of the apps that write to Health Connect -->
+        <package android:name="com.fitbit.FitbitMobile" />
+        <package android:name="com.withings.wiscale2" />
+        <package android:name="com.sec.android.app.shealth" />
+        <package android:name="com.renpho.health" />
+        <package android:name="lu.boud.gymsync" />
+        <!-- To find the home-screen app, which needs read access to the widget images. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.HealthBoud">
+
+        <!-- WorkManager's foreground service needs its type declared on Android 14+ (Apple Health import) -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboardHidden"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".RationaleActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".RationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- V2 picker entry 1 of 2: "Health BB" (tiles; class name kept so placed widgets survive) -->
+        <receiver
+            android:name=".widget.DashboardWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_slot1_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_slot1_info" />
+        </receiver>
+        <!-- V2: hidden from the picker (hide_from_picker|reconfigurable), kept for placed widgets, migrated to Health BB -->
+        <receiver
+            android:name=".widget.CoverWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_slot2_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_slot2_info" />
+        </receiver>
+        <!-- V2: hidden, kept, migrated to Health BB -->
+        <receiver
+            android:name=".widget.Widget3Receiver"
+            android:exported="true"
+            android:label="@string/widget_slot3_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_slot3_info" />
+        </receiver>
+        <!-- V2 picker entry 2 of 2: "Health BB · Clock" (today's rings + clock; class name kept for placed Rings widgets) -->
+        <receiver
+            android:name=".widget.RingsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_rings_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_rings_info" />
+        </receiver>
+        <!-- V2: hidden, kept, migrated to Health BB (weekly_goals L); hourly update kept -->
+        <receiver
+            android:name=".widget.WeeklyWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_weekly_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_weekly_info" />
+        </receiver>
+
+        <!-- V2: hidden, kept, migrated to Health BB (zone_min L); hourly update kept -->
+        <receiver
+            android:name=".widget.CardioWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_cardio_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_cardio_info" />
+        </receiver>
+
+        <!-- V2: hidden, kept, migrated to Health BB (yesterday_workouts L) -->
+        <receiver
+            android:name=".widget.RecentWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_recent_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_recent_info" />
+        </receiver>
+
+        <!-- V2: hidden, kept, migrated to Health BB (week_workouts M) -->
+        <receiver
+            android:name=".widget.WorkoutsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_workouts_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_workouts_info" />
+        </receiver>
+
+        <!-- V2 widget setup (placement + long-press reconfigure); the screen follows the widget's family (tiles or clock). -->
+        <activity
+            android:name=".widget.WidgetSetupActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboardHidden"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name=".widget.RingsClockSetup"
+            android:exported="true"
+            android:targetActivity=".widget.WidgetSetupActivity">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity-alias>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>
