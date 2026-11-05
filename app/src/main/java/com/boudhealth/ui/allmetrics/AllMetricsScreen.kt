@@ -22,6 +22,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -110,7 +112,7 @@ internal object AllMetricsText {
     fun day(d: LocalDate, today: LocalDate): String = when (ChronoUnit.DAYS.between(d, today)) {
         0L -> "Today"
         1L -> "Yesterday"
-        else -> DateTimeFormatter.ofPattern(if (d.year == today.year) "d MMM" else "d MMM yyyy", Locale.getDefault()).format(d)
+        else -> DateTimeFormatter.ofPattern(if (d.year == today.year) "d MMM" else "d MMM yyyy", Locale.ENGLISH).format(d)
     }
 }
 
@@ -240,5 +242,13 @@ private fun TrendMark(metricId: String, dir: TrendDir) {
     Text(
         when (dir) { TrendDir.UP -> "▲"; TrendDir.DOWN -> "▼"; TrendDir.FLAT -> "●" },
         fontSize = if (dir == TrendDir.FLAT) 9.sp else 12.sp, fontWeight = FontWeight.Bold, color = color,
+        // R5 #36: TalkBack says the direction word, not "black up-pointing triangle"
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription = when (dir) {
+                TrendDir.UP -> com.boudhealth.ui.section.R3Texts.A11Y_UP
+                TrendDir.DOWN -> com.boudhealth.ui.section.R3Texts.A11Y_DOWN
+                TrendDir.FLAT -> com.boudhealth.ui.section.R3Texts.A11Y_SAME
+            }
+        },
     )
 }

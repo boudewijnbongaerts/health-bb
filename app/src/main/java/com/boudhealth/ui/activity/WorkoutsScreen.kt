@@ -66,7 +66,7 @@ private class WorkoutsLoad(
 
 /**
  * Workouts sub-page (D13, V2-074; restore W1/W2/W4): period bar incl. 3M, minutes stacked by workout type with the
- * per-type read-out, Total time · Heart points · Avg heart rate (Calories burned on 1D), type filter, sessions by day.
+ * per-type read-out, Total time · Heart points · Avg HR (Calories burned on 1D), type filter, sessions by day.
  * Opened from "All n" in the Activity hero, filtered to that period.
  */
 @Composable
@@ -90,7 +90,10 @@ fun WorkoutsScreen(nav: Nav) {
                 val (byType, grain) = if (s.is3M) {
                     generateSequence(p.start) { it.plusMonths(1) }.takeWhile { !it.isAfter(p.last) }
                         .flatMap { m -> e.minutesByType(SectionPeriod.Month(m.year, m.monthValue), env.today).perBucket }.toList() to Grain.DAY
-                } else e.minutesByType(p, env.today).let { mt -> mt.perBucket to (if (p is SectionPeriod.Day) Grain.DAY else com.boudhealth.data.V2Math.grainFor(p)) }
+                } else if (p is SectionPeriod.Day) {
+                    // R6 item 1: 1D charts the 7 days ending on the day (as the Activity tab on 1D); the list stays the day's
+                    com.boudhealth.data.DayView.days(p.start).flatMap { d -> e.minutesByType(SectionPeriod.Day(d.toEpochDay()), env.today).perBucket } to Grain.DAY
+                } else e.minutesByType(p, env.today).let { mt -> mt.perBucket to com.boudhealth.data.V2Math.grainFor(p) }
                 WorkoutsLoad(s, p, V2.workouts(env, p), ds, byType, grain, e.sessionDetails(p, env.today))
             }
         }.getOrNull()
@@ -101,20 +104,25 @@ fun WorkoutsScreen(nav: Nav) {
         if (l == null) { SkeletonBox(Modifier.fillMaxWidth(), height = 320.dp, radius = 22.dp); return@SectionDetailScaffold }
         Column(Modifier.alpha(if (l.ds.period != scope.period) 0.6f else 1f)) {
             val sessions = l.workouts.sessions.filter { type == null || ExerciseTypes.group(it) == type }
-            // W1: minutes stacked by workout type (T1 minutesByType), per-type read-out
-            if (l.p !is SectionPeriod.Day && sessions.isNotEmpty()) {
-                val groups = l.workouts.types.map { it.first }.filter { type == null || it == type }.take(6)
+            // W1: minutes stacked by workout type (T1 minutesByType), per-type read-out; R6 item 1: 1D = the 7 days ending on the day
+            val day = l.p as? SectionPeriod.Day
+            val chartP: SectionPeriod = day?.let { SectionPeriod.All(com.boudhealth.data.DayView.windowStart(it.start).toEpochDay(), it.epochDay) } ?: l.p
+            val weekGroups = if (day == null) emptyList() else l.byType.flatMap { it.second.entries }.groupBy({ it.key }, { it.value })
+                .mapValues { it.value.sum() }.filter { it.value > 0 }.entries.sortedWith(compareByDescending<Map.Entry<WorkoutGroup, Int>> { it.value }.thenBy { it.key.ordinal }).map { it.key }
+            val dayChart = day != null && weekGroups.any { type == null || it == type }
+            if ((day == null && sessions.isNotEmpty()) || dayChart) {
+                val groups = (if (day != null) weekGroups else l.workouts.types.map { it.first }).filter { type == null || it == type }.take(6)
                 val buckets = l.byType.map { (b, m) ->
                     val seg = DoubleArray(groups.size) { i -> (m[groups[i]] ?: 0).toDouble() }
                     b.copy(value = if (b.future) null else seg.sum().takeIf { it > 0 }, segments = if (seg.sum() > 0) seg else null)
                 }
                 HBCard(Modifier.fillMaxWidth(), padding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
-                    DetailBars(l.p, buckets, l.grain, Cat.strength, "min", "Workout minutes by type", height = 200.dp,
+                    DetailBars(chartP, buckets, l.grain, Cat.strength, "min", "Workout minutes by type", height = 200.dp,
                         segmentColors = groups.map { Cat.workoutColor(it) }, segmentNames = groups.map { it.label })
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            // W2: Total time · Heart points · Avg heart rate (T1 sessionDetails; the one average the v6 rules allow); 1D: Calories burned first
+            // W2: Total time · Heart points · Avg HR (T1 sessionDetails; the one average the v6 rules allow); 1D: Calories burned first
             val starts = sessions.map { it.start }.toSet()
             val det = l.details.filter { it.workout.start in starts }
             val totalMin = sessions.sumOf { it.minutes }
@@ -126,7 +134,7 @@ fun WorkoutsScreen(nav: Nav) {
                 if (l.p is SectionPeriod.Day) Stat(ActivityTexts.CALORIES_STAT, if (kcal > 0) SFmt.int(kcal) else "—", if (kcal > 0) "kcal" else null)
                 else Stat(ActivityTexts.TOTAL_TIME, SFmt.hm(totalMin)),
                 Stat(ActivityTexts.HEART_POINTS, SFmt.int(pts.toDouble())),
-                Stat(ActivityTexts.AVG_HR, avgHr?.toString() ?: "—", if (avgHr != null) "bpm" else null),
+                Stat("Avg HR", avgHr?.toString() ?: "—", if (avgHr != null) "bpm" else null),   // R5 #28: kept (owner), label "Avg HR" (#41)
             ))
             Spacer(Modifier.height(12.dp))
             val types = l.workouts.types
@@ -138,6 +146,8 @@ fun WorkoutsScreen(nav: Nav) {
                 Spacer(Modifier.height(4.dp))
             }
             if (sessions.isEmpty()) {
+                // R6 item 1: no empty state under a 1D chart that shows workouts in the 7 days
+                if (dayChart) return@Column
                 Spacer(Modifier.height(24.dp))
                 EmptyState(Glyph.Dumbbell, Cat.strength, title = ActivityTexts.EMPTY_WORKOUTS, body = "")
                 return@Column

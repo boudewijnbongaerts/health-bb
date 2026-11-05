@@ -2,7 +2,12 @@ package com.boudhealth.ui.components
 
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -28,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -132,17 +138,6 @@ fun HBCard(
     Column(m.background(color, shape).padding(padding), content = content)
 }
 
-/** Tile: `tile` colour, r 18, padding 16 (grouped containers inside a screen). */
-@Composable
-fun HBTile(
-    modifier: Modifier = Modifier,
-    color: Color = LocalHB.current.colors.tile,
-    shape: Shape = HbShapes.tile,
-    padding: PaddingValues = PaddingValues(16.dp),
-    onClick: (() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) = HBCard(modifier, color, shape, padding, onClick, null, content)
-
 // =====================================================================================================================
 // Icon buttons + glyph circles
 // =====================================================================================================================
@@ -209,6 +204,7 @@ enum class ButtonKind { Primary, Tonal, Text }
 /**
  * Pill button. Primary: palette accent fill + onAccent label (v3 C2). Tonal: accentCont + onAccentCont. Text: accent label only.
  * [small] = h 40, 14/600, padding 18; else h 52, 15/600. [fullWidth] only inside sheets. One primary per view.
+ * [busy] (R6): the action is running: not clickable, drawn disabled, and its [glyph] turns (off under reduced motion).
  */
 @Composable
 fun HBButton(
@@ -220,9 +216,16 @@ fun HBButton(
     glyph: Glyph? = null,
     enabled: Boolean = true,
     fullWidth: Boolean = false,
+    busy: Boolean = false,
 ) {
     val hb = LocalHB.current
     val c = hb.colors
+    val active = enabled && !busy
+    // same infinite-transition pattern as the shimmer (Feedback.kt) and the edit wiggle (EditHomeScreen.kt)
+    val spin: State<Float>? = if (busy && glyph != null && !hb.reducedMotion) {
+        val inf = rememberInfiniteTransition(label = "buttonBusy")
+        inf.animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing), RepeatMode.Restart), label = "buttonBusySpin")
+    } else null
     val (bg, fg) = when (kind) {
         ButtonKind.Primary -> c.accent to c.onAccent
         ButtonKind.Tonal -> c.accentCont to c.onAccentCont
@@ -236,15 +239,16 @@ fun HBButton(
             .then(if (fullWidth) Modifier.fillMaxWidth() else Modifier)
             .height(h)
             .defaultMinSize(minWidth = if (kind == ButtonKind.Text) 48.dp else 64.dp)
-            .alpha(if (enabled) 1f else 0.38f)
-            .hbClickable(enabled = enabled, shape = shape, onClick = onClick)
+            .alpha(if (active) 1f else 0.38f)
+            .hbClickable(enabled = active, shape = shape, onClick = onClick)
             .background(bg, shape)
             .padding(horizontal = hp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
         if (glyph != null) {
-            GlyphIcon(glyph, size = if (small) 18.dp else 20.dp, color = fg)
+            GlyphIcon(glyph, size = if (small) 18.dp else 20.dp, color = fg,
+                modifier = if (spin != null) Modifier.graphicsLayer { rotationZ = spin.value } else Modifier)
             Spacer(Modifier.width(8.dp))
         }
         Text(text, style = if (small) hb.type.buttonS else hb.type.button, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -256,11 +260,6 @@ fun HBButton(
 fun SheetActions(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
 }
-
-/** Simple label + trailing content row helper (used by several components). */
-@Composable
-internal fun CenterRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) =
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, content = content)
 
 /**
  * v4.1 review: a touch area of at least [target] (48 dp) around a smaller control WITHOUT changing the layout: the

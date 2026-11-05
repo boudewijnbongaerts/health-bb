@@ -176,10 +176,17 @@ private fun MeasurementsCard(ctx: SectionContext) {
     val pitch = if (cover) 38.dp else 36.dp
     val fs = if (cover) 13f else 13.5f
     val hiColor = hb.colors.tileHi
+    // values right-aligned in a box as wide as the column's widest value ("000.0" weight / waist, "00.0" fat % / lean): decimals line up
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val valW = cols.associateWith { id ->
+        val probe = if (id == BodyIds.WEIGHT || id == BodyIds.WAIST) "000.0" else "00.0"
+        with(dens) { tm.measure(probe, TextStyle(fontSize = fs.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")).size.width.toDp() }
+    }
     R3CardFrame(
         R3Texts.MEASUREMENTS, Glyph.List, hb.colors.muted, onClick = null,
         headerTrailing = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MeasureButton(iconOnly = cover) { ctx.nav.push(Route.Tape) }
                 Row(Modifier.height(28.dp).background(hb.colors.tile, RoundedCornerShape(14.dp)).plainClickable { ctx.openMetric(BodyIds.WEIGHT) }
                     .padding(start = 13.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -225,7 +232,8 @@ private fun MeasurementsCard(ctx: SectionContext) {
                     Row(Modifier.weight(weights[j]), verticalAlignment = Alignment.CenterVertically) {
                         if (cell == null) Text(R3Texts.DASH, fontSize = fs.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted.copy(alpha = 0.6f))
                         else {
-                            Text(R3Texts.dec(cell.value, 1), fontSize = fs.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
+                            Text(R3Texts.dec(cell.value, 1), fontSize = fs.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1,
+                                style = TextStyle(fontFeatureSettings = "tnum", textAlign = androidx.compose.ui.text.style.TextAlign.End), modifier = Modifier.width(valW.getValue(id)))
                             if (!cover && cell.change != null) {
                                 Spacer(Modifier.width(6.dp))
                                 Text(R3Texts.signed(cell.change, 1), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, maxLines = 1,

@@ -245,7 +245,7 @@ fun EditHomeScreen(slot: String, nav: Nav) {
                 Spacer(Modifier.height(20.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Arrange Home", fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                        Text("Arrange home", fontSize = 30.sp, fontWeight = FontWeight.Bold,
                             letterSpacing = (-0.5).sp, lineHeight = 36.sp, color = hb.colors.text, maxLines = 1)
                         Text("${list.size} ${if (list.size == 1) "tile" else "tiles"}", style = hb.type.bodyMedium, color = hb.colors.muted, maxLines = 1)
                     }

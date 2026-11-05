@@ -1,17 +1,17 @@
 # Health BB: handover
 
-Read this first when you pick the project up again (human or AI). Base version: **2.1.0** (versionCode 13).
+Read this first when you pick the project up again (human or AI). Base version: **2.3.1** (versionCode 16) — the baseline.
 
 ## 1. Product rules (binding)
 
 1. Facts only. No explanatory text in the app, no advice, no health judgements, no source lines ("via Health Connect").
-2. No averages anywhere, except a workout's Avg HR.
+2. Prefer real readings, ranges, records and counts. Averages only where they make sense and are labelled (e.g. "Avg HR" for workouts); never an average disguised as High/Low/Latest.
 3. Status is shown with icons only: ▲ ahead · ● on track · ▼ behind · ✓ done. No checkmark on rings.
 4. No 3-dot overflow menus. Data checks live only in Settings.
 5. Ring numbers sit inside the ring stroke ("34 / 50", the "/ 50" muted; short forms like 16k), never upside down.
 6. Every user-facing text is listed and approved before it ships. A new text needs owner approval first.
 7. Pixel care: pills, badges and day letters exactly centred. Smooth, detailed, not oversized.
-8. Read-only towards Health Connect.
+8. Read-only towards Health Connect. Optional read-only Google Health API connection (Settings → Google Health) for daily VO₂ max, which Google Health does not write to Health Connect (`data/GoogleHealth*.kt`, on-device OAuth via Google Identity Services, owner's own Google Cloud project).
 9. Nothing personal in the repo: no real health values, names, devices or screenshots with real data.
 
 ## 2. Structure
@@ -59,3 +59,6 @@ Keep these names stable: the package id `com.boudhealth`, the widget receiver cl
 v1–v6: KWGT prototype, native app, tiles and widgets, Apple Health import, Renpho tape, design system "Mono Ink".
 V2.0 (Nov 2026): tabs Home · Activity · Body · Vitals, section dashboards with periods, ring rework, two widgets, month ring calendar, restored detail views and insights, approved texts.
 V2.1 (Nov 2026): Activity, Body and Vitals rebuilt as rich dashboards: Activity ring + Apple-style ring calendar, Body weight/composition hero (no rings), Vitals resting HR + four stacked lanes; Trends strip of 6 fact tiles per period (no averages); previous period in grey behind charts; medians removed (Vitals arrows, heart points suggestion). Shared code: `data/R3*.kt`, `ui/section/R3*.kt`, `TrendsStrip.kt`, `RingCalendar.kt`.
+V2.2 (Nov 2026): Google Health API connection for VO₂ max; tile text fixes.
+V2.3 (Nov 2026): final polish baseline — alignment fixes app-wide, Inter everywhere, consistent texts and English formats, last-month ranges instead of 60-day averages on vital tiles, dead code removed.
+V2.3.1 (Nov 2026): every metric page has 1D 1W 1M 3M 1Y All (1D = the day's value + 7 days around it); Settings: Sync now as a button; Data check shows the sources actually used ("Google Health (direct)" for the API).

@@ -141,7 +141,12 @@ internal class DetailModel(
     // Sleep extras
     val nights: List<SleepNight> = emptyList(),
     val stages: List<SleepStage> = emptyList(),
-)
+) {
+    /** R6 item 1: 1D of Workout minutes = the 7 days ending on the day, one bar per day (as the Activity tab on 1D). */
+    var week7: List<SeriesBucket> = emptyList()
+    /** R6 item 1: 1D of Streak = the workout days among the 7 days ending on the day. */
+    var active7: Set<LocalDate> = emptySet()
+}
 
 internal fun loadDetail(env: MetricEnv, id: String, ds0: DScope): DetailModel {
     val today = env.today
@@ -202,6 +207,17 @@ internal fun loadDetail(env: MetricEnv, id: String, ds0: DScope): DetailModel {
         m = DetailModel(m.ds, p, dataStart, card, m.total, m.goal, m.trend, m.buckets, m.grain, null, m.gap, m.history, null, null, null,
             nights = nights, stages = stages)
     }
+    if (p is SectionPeriod.Day && (id == "exercise_min" || id == "streak")) {
+        val d0 = p.start
+        val from = com.boudhealth.data.DayView.windowStart(d0)
+        if (id == "exercise_min") {
+            val daily = if (from.isAfter(today)) emptyMap() else e.daily(id, from, minOf(d0, today))
+            m.week7 = com.boudhealth.data.DayView.days(d0).map { d ->
+                val fut = d.isAfter(today)
+                SeriesBucket(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), if (fut || d.isBefore(dataStart)) null else daily[d] ?: 0.0, future = fut)
+            }
+        } else if (!from.isAfter(today)) m.active7 = e.activeDays(from, minOf(d0, today))
+    }
     return m
 }
 
@@ -232,10 +248,13 @@ fun ActivityDetailScreen(metricId: String, nav: Nav, defaultUnit: PeriodUnit = P
         Column(Modifier.alpha(if (l.ds.period != scope.period) 0.6f else 1f)) {
             when (id) {
                 "streak" -> {
-                    MetricCardFrame(title, Glyph.Flame, ActivityColors.flame(hb), info = ActivityTexts.INFO_WORKOUT_DAYS) {
+                    MetricCardFrame(title, Glyph.Flame, ActivityColors.flame(hb),
+                        // R5 #38: the (i) text follows the saved workout-day rule
+                        info = com.boudhealth.ui.section.InfoText(ActivityTexts.INFO_WORKOUT_DAYS.title,
+                            com.boudhealth.ui.settings.infoWorkoutDays(com.boudhealth.ui.nav.LocalPrefs.current.goals))) {
                         StreakHeadline(p, l.card)
                         Spacer(Modifier.height(12.dp))
-                        StreakGraph(p, l.card, today, onTap = pick)
+                        if (p is SectionPeriod.Day) StreakDays7(p.start, l.active7, today) else StreakGraph(p, l.card, today, onTap = pick)
                     }
                 }
                 else -> {
@@ -270,7 +289,11 @@ private fun TotalDetail(id: String, title: String, l: DetailModel, today: LocalD
             unit.ifEmpty { null }, size = 34f)
         l.goalDays?.let { (n, m) -> Text(ActivityTexts.goalMet(id, n, m), fontSize = 13.sp, color = hb.colors.muted, modifier = Modifier.padding(top = 2.dp)) }
         Spacer(Modifier.height(12.dp))
-        if (l.gap != SeriesGap.NONE && p is SectionPeriod.Day) {
+        if (p is SectionPeriod.Day && l.week7.isNotEmpty()) {
+            // R6 item 1: Workout minutes 1D = the day's total + the 7 days ending on it
+            val p7 = SectionPeriod.All(com.boudhealth.data.DayView.windowStart(p.start).toEpochDay(), p.epochDay)
+            DetailBars(p7, l.week7, Grain.DAY, color, unit, "$title chart", decimals = 0, goal = l.dailyGoal)
+        } else if (l.gap != SeriesGap.NONE && p is SectionPeriod.Day) {
             TotalGraph(p, l.card, color, today, onTap = pick, height = 220.dp)
         } else {
             DetailBars(p, l.buckets, l.grain, color, unit, "$title chart", decimals = 0,
@@ -284,7 +307,11 @@ private fun TotalDetail(id: String, title: String, l: DetailModel, today: LocalD
     // D1: Total · Best day (Peak hour on 1D) · Goal — T1 stats
     val st = l.stats
     val u = unit.ifEmpty { null }
-    val best = if (p is SectionPeriod.Day)
+    val best7 = l.week7.filter { (it.value ?: 0.0) > 0 }.maxByOrNull { it.value!! }
+    val best = if (p is SectionPeriod.Day && l.week7.isNotEmpty())
+        // R6 item 1: no hourly peak for workout minutes on 1D: the best day of the 7 shown
+        Stat(ActivityTexts.BEST_DAY, best7?.value?.let { SFmt.int(it) } ?: "—", best7?.let { SFmt.shortDate(it.day) })
+    else if (p is SectionPeriod.Day)
         Stat(ActivityTexts.PEAK_HOUR, st?.peakHour?.let { String.format(java.util.Locale.US, "%02d:00", it.hour) } ?: "—", st?.peakValue?.let { SFmt.int(it) + (u?.let { x -> " $x" } ?: "") })
     else Stat(ActivityTexts.BEST_DAY, st?.bestValue?.let { SFmt.int(it) } ?: "—", st?.bestDay?.let { SFmt.shortDate(it) })
     StatRow(listOfNotNull(
@@ -302,6 +329,31 @@ private fun TotalDetail(id: String, title: String, l: DetailModel, today: LocalD
     }
     if (zones) HeartPointsExtras(l, today, pick, onZone)
     if (goalSheet) com.boudhealth.ui.health.GoalSheet(id) { goalSheet = false }
+}
+
+/** R6 item 1: Streak 1D = the 7 days ending on [day] as workout-day dots (the Week row of [StreakGraph]). */
+@Composable
+private fun StreakDays7(day: LocalDate, active: Set<LocalDate>, today: LocalDate) {
+    val hb = LocalHB.current
+    val c = ActivityColors.flame(hb)
+    Spacer(Modifier.height(16.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        com.boudhealth.data.DayView.days(day).forEach { d ->
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Canvas(Modifier.size(24.dp)) {
+                    val r = this.size.minDimension / 2f
+                    when {
+                        d.isAfter(today) -> drawCircle(hb.colors.tileHi, r - 1.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+                        d in active -> drawCircle(c, r)
+                        else -> drawCircle(hb.colors.tileHi, r)
+                    }
+                    if (d == day) drawCircle(hb.colors.text, r, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(SFmt.dayLetter(d), style = hb.type.labelS, color = if (d == day) hb.colors.text else hb.colors.muted)
+            }
+        }
+    }
 }
 
 @Composable
@@ -363,7 +415,7 @@ private fun HeartPointsExtras(l: DetailModel, today: LocalDate, pick: (LocalDate
         val p = SectionPeriod.All(ws.first().monday.toEpochDay(), ws.last().monday.plusDays(6).toEpochDay())
         val buckets = ws.map { w -> SeriesBucket(w.monday.atStartOfDay(), w.monday.plusWeeks(1).atStartOfDay(), w.points.toDouble().takeIf { w.hasData }, partial = w.partial) }
         HBCard(Modifier.fillMaxWidth(), padding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
-            DetailBars(p, buckets, Grain.DAY, ActivityColors.heart(hb), "pts", "Weekly heart points", goal = l.weeklyTarget?.toDouble(),
+            DetailBars(p, buckets, Grain.DAY, ActivityColors.heart(hb), "pts", "Heart points per week", goal = l.weeklyTarget?.toDouble(),
                 height = 180.dp, state = remember(n, l.weeks) { com.boudhealth.ui.components.TimeChartState() })
         }
     }
@@ -506,7 +558,7 @@ private fun SleepHero(p: SectionPeriod, d: CardData, nights: List<SleepNight>) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Headline(n?.let { SFmt.hm(it.info.asleepMin) } ?: "—", size = 36f)
             Spacer(Modifier.weight(1f))
-            if (n != null) Text("${Fmt.hm(n.info.start)} – ${Fmt.hm(n.info.end)}", fontSize = 14.sp, color = hb.colors.muted)
+            if (n != null) Text("${Fmt.hm(n.info.start)}–${Fmt.hm(n.info.end)}", fontSize = 14.sp, color = hb.colors.muted)
         }
         return
     }
@@ -566,7 +618,7 @@ private fun StageTable(n: SleepNight) {
     val c = ActivityColors.stages(hb)
     val i = n.info
     val tot = (i.deepMin + i.remMin + i.lightMin + i.awakeMin + i.asleepUnspecifiedMin).coerceAtLeast(1)
-    fun pct(m: Int) = "${Math.round(m * 100.0 / tot)} %"
+    fun pct(m: Int) = "${Math.round(m * 100.0 / tot)}${com.boudhealth.ui.section.R3Texts.PCT_SP}%"
     val rows = buildList {
         add(Triple("Deep", i.deepMin, c[0])); add(Triple("REM", i.remMin, c[1])); add(Triple("Light", i.lightMin, c[2])); add(Triple("Awake", i.awakeMin, c[3]))
         if (i.asleepUnspecifiedMin > 0) add(Triple(com.boudhealth.data.SleepInfo.UNSPECIFIED_LABEL, i.asleepUnspecifiedMin, c[2].copy(alpha = 0.55f)))
@@ -598,7 +650,7 @@ private fun NightsList(nights: List<SleepNight>, onNight: (SleepNight) -> Unit) 
             Row(Modifier.fillMaxWidth().plainClickable { onNight(n) }.padding(horizontal = 20.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(Insights.dayLabel(n.date), fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1)
-                    Text("${Fmt.hm(n.info.start)} – ${Fmt.hm(n.info.end)}", fontSize = 12.5.sp, color = hb.colors.muted, maxLines = 1)
+                    Text("${Fmt.hm(n.info.start)}–${Fmt.hm(n.info.end)}", fontSize = 12.5.sp, color = hb.colors.muted, maxLines = 1)
                 }
                 Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(SFmt.hm(n.info.asleepMin), fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)

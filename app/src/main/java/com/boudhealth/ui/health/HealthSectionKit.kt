@@ -46,7 +46,7 @@ object HealthTexts {
     const val MEASURE = "Measure"
     const val EMPTY_PERIOD = "No data for this period"
     const val WHTR = "WHtR"
-    const val WHTR_INFO = "WHtR = waist ÷ height · under 0.5 is healthy"
+    const val WHTR_INFO = "WHtR = waist ÷ height"   // R5 #47: no health judgement ("healthy"); the Waist chart keeps its bands
     fun all(n: Int) = "All $n"
     fun lastMeasured(d: LocalDate, today: LocalDate) = "Last measured ${dateText(d, today)}"
     fun dateText(d: LocalDate, today: LocalDate) = SFmt.shortDate(d) + if (d.year != today.year) " ${d.year}" else ""

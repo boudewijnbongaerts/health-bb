@@ -12,8 +12,8 @@ android {
         applicationId = "com.boudhealth"
         minSdk = 34
         targetSdk = 37
-        versionCode = 13
-        versionName = "2.1.0"
+        versionCode = 16
+        versionName = "2.3.1"
     }
 
     buildTypes {
@@ -48,4 +48,5 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
 }

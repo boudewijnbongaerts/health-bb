@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.SpanStyle
@@ -65,7 +66,6 @@ import com.boudhealth.ui.components.CalloutLine
 import com.boudhealth.ui.components.ChartSel
 import com.boudhealth.ui.components.DetailScaffold
 import com.boudhealth.ui.components.EmptyState
-import com.boudhealth.ui.components.FilterPill
 import com.boudhealth.ui.components.Fmt
 import com.boudhealth.ui.components.Glyph
 import com.boudhealth.ui.components.GlyphIcon
@@ -180,9 +180,6 @@ private fun MetricTemplate(m: Metric, nav: Nav, handoffKey: String = m.id) {
     var showGoal by rememberSaveable { mutableStateOf(false) }
     var showAll by rememberSaveable { mutableStateOf(false) }
     var showInfo by rememberSaveable { mutableStateOf(false) }
-    // weight overlays (v3 D7): which of body fat % / fat mass / lean mass are drawn over the weight line
-    var overlayIds by rememberSaveable(m.id) { mutableStateOf("") }   // comma-separated (Bundle-safe)
-    val overlays = overlayIds.split(',').filter { it.isNotEmpty() }
     val w = remember(range, offset) { HealthPeriods.window(range, offset) }
     // Q23: zoom + selection of the chart; a new window (range chip, ‹ ›) starts unzoomed with nothing selected
     val chartState = remember(m.id, w) { TimeChartState() }
@@ -249,14 +246,13 @@ private fun MetricTemplate(m: Metric, nav: Nav, handoffKey: String = m.id) {
                     else {
                         HeroAndChart(
                             m, d, color, chartState, Modifier.bringIntoViewRequester(chartBiv),
-                            overlays = overlays, onToggleOverlay = { id -> overlayIds = (if (id in overlays) overlays - id else overlays + id).joinToString(",") },
                         )
                     }
                 },
                 right = {
                     if (d != null) {
                         Spacer(Modifier.height(if (screen.wide) 20.dp else 24.dp))
-                        if (!(m.id == "vo2" && d.window.range == Range.DAY)) MetricStats(m, d)
+                        MetricStats(m, d)
                         val model = d.chart
                         val useList = model != null && !model.hourly && model.readings.isNotEmpty()
                         if (useList) {
@@ -284,7 +280,6 @@ private fun MetricTemplate(m: Metric, nav: Nav, handoffKey: String = m.id) {
 @Composable
 private fun HeroAndChart(
     m: Metric, d: DetailData, color: Color, state: TimeChartState, chartModifier: Modifier,
-    overlays: List<String> = emptyList(), onToggleOverlay: (String) -> Unit = {},
 ) {
     val hb = LocalHB.current
     val prefs = LocalPrefs.current
@@ -298,28 +293,13 @@ private fun HeroAndChart(
     val model = d.chart
     val goal = m.goal(prefs.goals)
 
-    // VO₂ max 1D (owner): the latest value on or before that day, with its date; muted when from an earlier day
-    if (m.id == "vo2" && w.range == Range.DAY) {
-        val day = w.start
-        val last = (d.history + d.periodDaily).filter { !it.date.isAfter(day) }.maxByOrNull { it.date }
-        val earlier = last != null && last.date != day
-        MetricHero(
-            displayLabel(m), color, last?.v, metricUnit(m), decimals = 1,
-            context = last?.let { Fmt.dayLabel(it.date, today) },
-            animateKey = key,
-            valueContent = {
-                Text(buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 44.sp, fontWeight = FontWeight.Bold, color = if (earlier || last == null) hb.colors.muted else hb.colors.text)) {
-                        append(last?.let { Fmt.num(it.v, 1) } ?: "—")
-                    }
-                    withStyle(SpanStyle(fontSize = 18.sp, color = hb.colors.muted)) { append(" " + metricUnit(m)) }
-                }, maxLines = 1)
-            },
-        )
-        if (last == null) { Spacer(Modifier.height(12.dp)); NoData(m, color, chartH) }
-        return
-    }
-    SelectionHero(m, d, hero, color, state, key)
+    // R6 item 1 (owner): 1D of a one-value metric = that day's value with its date (muted "Last measured {date}" when it
+    // is from an earlier day, as VO₂ 1D did), then the chart of the 7 days ending on the day (as the tabs)
+    if (d.dayView) {
+        val pk = d.dayPick
+        OneDayHero(displayLabel(m), color, pk?.pt?.v, metricUnit(m), m.decimals, pk?.pt?.date, pk?.carried ?: false, today, key,
+            valueText = { v -> fmtValue(m.id, v, m.decimals) })
+    } else SelectionHero(m, d, hero, color, state, key)
     // C1: the zone-minutes detail shows the week as the same bar as under the rings (1W)
     if (m.id == "zone_min" && w.range == Range.WEEK) {
         Spacer(Modifier.height(14.dp))
@@ -328,7 +308,7 @@ private fun HeroAndChart(
     Spacer(Modifier.height(12.dp))
 
     if (model == null || model.levels.firstOrNull()?.points.isNullOrEmpty()) {
-        if (w.range == Range.DAY && d.periodDaily.isNotEmpty()) EmptyState(
+        if (w.range == Range.DAY && !d.dayView && d.periodDaily.isNotEmpty()) EmptyState(
             metricGlyph(m.id), color, "Hourly data not stored for this day", "", modifier = Modifier.height(chartH),
         ) else NoData(m, color, chartH)
         return
@@ -360,19 +340,23 @@ private fun HeroAndChart(
         }
     }
     // V7-S2: VO₂ max keeps its large trend arrow + the change vs 3 months ago
-    if (m.id == "vo2") d.extra["vo2_change"]?.firstOrNull()?.v?.let { ch ->
+    if (m.id == "vo2" && !d.dayView) d.extra["vo2_change"]?.firstOrNull()?.v?.let { ch ->
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
             val dir = if (abs(ch) < 0.05) 0 else if (ch > 0) 1 else -1
             BigTrendArrow(dir, if (dir == 0) null else ch > 0)
             Spacer(Modifier.width(14.dp))
             Column {
-                Text(signedDiff(m, ch) + " " + metricUnit(m), style = hb.type.titleS, color = hb.colors.text, maxLines = 1)
-                Text("vs 3 months ago", style = hb.type.bodyXS, color = hb.colors.muted, maxLines = 1)
+                // R5 #41: zero reads "Same" (not "±0")
+                val same = isZeroDiff(m, ch)
+                Text(if (same) "Same" else signedDiff(m, ch) + " " + metricUnit(m), style = hb.type.titleS, color = hb.colors.text, maxLines = 1)
+                Text(if (same) "as 3 months ago" else "vs 3 months ago", style = hb.type.bodyXS, color = hb.colors.muted, maxLines = 1)
             }
         }
     }
     if (hrBand != null && hrBand.buckets.isNotEmpty()) {
-        BandChart(hrBand.buckets, hrBand.grain, hrBand.period, today, color, modifier = chartModifier, height = chartH)
+        // R5 #36: the band chart gets the same TalkBack summary as TimeChart
+        BandChart(hrBand.buckets, hrBand.grain, hrBand.period, today, color, height = chartH,
+            modifier = chartModifier.semantics { contentDescription = description })
     } else if (m.id == "vo2") {
         Vo2Chart(model, color, chartH, prefs.goals.birthYear, callout, description, state, chartModifier, key)
     } else {
@@ -384,15 +368,41 @@ private fun HeroAndChart(
             area = !bars && (m.personalBand || m.id == "hr"),
             overlays = chartOverlays,
             minPad = if (m.decimals > 0) 0.5 else 1.0,
-            yFormat = yFormat, secondaryFormat = { "${Fmt.num(it)}%" },
+            yFormat = yFormat, secondaryFormat = { "${Fmt.num(it)}${com.boudhealth.ui.section.R3Texts.PCT_SP}%" },
             tagFormat = { fmtValue(m.id, it, m.decimals) },
             breakGaps = !isMeasurement(m.id), zoomable = zoomable, animateKey = key,
         )
     }
-    ChartFooter(state)
+    // R5 #33: one zoom reset only (the "Reset zoom" above the chart); the footer keeps its 4 dp gap
+    Spacer(Modifier.height(4.dp))
     if (m.id == "weight") {
         WeightComposition(d.extra["comp_lean"].orEmpty(), d.extra["comp_fat"].orEmpty(), d.extra["comp_pct"].orEmpty(), state, model.start, model.end)
     }
+}
+
+/**
+ * R6 item 1: hero of a one-value page on 1D (also the Waist page): the day's [value] with its [date]; when [carried] (from
+ * an earlier day) or missing, the number is muted and the context reads "Last measured {date}". Approved texts only.
+ */
+@Composable
+internal fun OneDayHero(
+    label: String, color: Color, value: Double?, unit: String, decimals: Int, date: LocalDate?, carried: Boolean,
+    today: LocalDate, key: Any, valueText: (Double) -> String = { Fmt.num(it, decimals) },
+) {
+    val hb = LocalHB.current
+    MetricHero(
+        label, color, value, unit.ifEmpty { null }, decimals = decimals,
+        context = date?.let { if (carried) com.boudhealth.ui.section.R3Texts.lastMeasured(it, today) else Fmt.dayLabel(it, today) },
+        animateKey = key,
+        valueContent = {
+            Text(buildAnnotatedString {
+                withStyle(SpanStyle(fontSize = 44.sp, fontWeight = FontWeight.Bold, color = if (carried || value == null) hb.colors.muted else hb.colors.text)) {
+                    append(value?.let(valueText) ?: "—")
+                }
+                if (unit.isNotEmpty()) withStyle(SpanStyle(fontSize = 18.sp, color = hb.colors.muted)) { append(" $unit") }
+            }, maxLines = 1)
+        },
+    )
 }
 
 /** Hero that mirrors the selected point (value + date), like the old scrub; deltas fade while a point is selected. */
@@ -418,9 +428,13 @@ private fun SelectionHero(m: Metric, d: DetailData, hero: HeroInfo, color: Color
 }
 
 private fun hourTitle(p: TPoint): String {
-    val loc = Locale.getDefault()
+    val loc = Locale.ENGLISH
     return DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm", loc).format(p.at) + "–" + DateTimeFormatter.ofPattern("HH:mm", loc).format(p.end)
 }
+
+/** True when [diff] rounds to zero in the metric's own format (R5 #41: shown as "Same", never "±0"). */
+private fun isZeroDiff(m: Metric, diff: Double): Boolean =
+    if (m.id == "sleep") Math.round(diff * 60) == 0L else Math.round(diff * Math.pow(10.0, m.decimals.toDouble())) == 0L
 
 /** Signed difference in the metric's own format ("−0.3", "+25m"). */
 private fun signedDiff(m: Metric, diff: Double): String = when (m.id) {
@@ -447,11 +461,6 @@ private fun buildCallout(
         return ChartCallout(hourTitle(p), f(p.v), unit, note = totalNote)
     }
     if (lv.bucketed) {
-        val idx = lv.points.indexOf(p)
-        val prev = lv.points.getOrNull(idx - 1)
-        val period = if (lv.grain == ChartGrain.WEEK) "week" else "month"
-        val adjacent = prev != null && prev.end == p.at
-        val delta = prev?.let { "${signedDiff(m, p.v - it.v)}$unitTail vs ${if (adjacent) "the $period before" else bucketTitle(it, lv.grain)}" }
         val lines = buildList {
             val noun = readingNoun(m.id, p.n)
             if (isTotal(m.id)) add(CalloutLine("Days with data", "${p.n}"))
@@ -467,7 +476,7 @@ private fun buildCallout(
     val prev = model.readings.getOrNull(p.ref - 1) ?: model.before
     val lines = buildList {
         if (m.id == "weight") {
-            r.extras["body_fat"]?.let { add(CalloutLine("Body fat percentage", "${Fmt.num(it, 1)} %", catColor("body_fat"))) }
+            r.extras["body_fat"]?.let { add(CalloutLine("Body fat percentage", "${Fmt.num(it, 1)}${com.boudhealth.ui.section.R3Texts.PCT_SP}%", catColor("body_fat"))) }
             
             r.extras["lean_mass"]?.let { add(CalloutLine("Lean mass", "${Fmt.num(it, 1)} kg", catColor("lean_mass"))) }
         }
@@ -475,7 +484,7 @@ private fun buildCallout(
             add(CalloutLine("Goal ${Fmt.compact(goal)}", if (r.v >= goal) "met" else "${pct(r.v, goal)}"))
         }
     }
-    val delta = prev?.let { "${signedDiff(m, r.v - it.v)}$unitTail vs ${shortDay(it.day, today)}" }
+    val delta = prev?.let { if (isZeroDiff(m, r.v - it.v)) "Same as ${shortDay(it.day, today)}" else "${signedDiff(m, r.v - it.v)}$unitTail vs ${shortDay(it.day, today)}" }
     val note = when {
         isTotal(m.id) && r.day == today -> "So far today"
         else -> null
@@ -494,20 +503,6 @@ private fun chartDescription(m: Metric, model: ChartModel, w: Window, today: Loc
     }
     return "${displayLabel(m)} chart, $pl${ps?.let { ", $it" } ?: ""}: $range. Tap or drag to read a value" + if (zoomable) "; pinch or double-tap to zoom." else "."
 }
-
-/** Under the chart: "Reset" while zoomed (the period bar already names the period; no trend line, owner v5). */
-@Composable
-private fun ChartFooter(state: TimeChartState) {
-    val hb = LocalHB.current
-    val scope = rememberCoroutineScope()
-    if (!state.zoomed) { Spacer(Modifier.height(4.dp)); return }
-    Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-        HBButton("Reset", { scope.launch { state.resetZoom(hb.reducedMotion) } }, kind = ButtonKind.Text, small = true, glyph = Glyph.Undo)
-    }
-}
-
-/** Overlay label / colour (v3 D7): fat % and fat mass in the fat colour (% dashed), lean mass in the lean colour. */
-private fun overlayLabel(id: String): String = when (id) { "body_fat" -> "Body fat percentage"; else -> "Lean mass" }
 
 private fun overlayColor(id: String): Color = when (id) {
     "body_fat" -> com.boudhealth.ui.theme.Cat.fat
@@ -533,12 +528,16 @@ private fun WeightComposition(lean: List<Pt>, fat: List<Pt>, pct: List<Pt>, stat
     val shown = near ?: lean.last()
     val fatAt = fat.firstOrNull { it.at == shown.at }?.v; val pctAt = pct.firstOrNull { it.at == shown.at }?.v
     Spacer(Modifier.height(16.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Dot(cLean, size = 8.dp); Spacer(Modifier.width(4.dp)); Text("Lean mass ${Fmt.num(shown.v, 1)} kg", style = hb.type.labelS, color = hb.colors.text)
-        Spacer(Modifier.width(12.dp))
-        Dot(cFat, size = 8.dp); Spacer(Modifier.width(4.dp)); Text("Fat mass ${fatAt?.let { Fmt.num(it, 1) } ?: "–"} kg", style = hb.type.labelS, color = hb.colors.text)
-        Spacer(Modifier.width(12.dp))
-        Text("Body fat ${pctAt?.let { Fmt.num(it, 1) } ?: "–"} %", style = hb.type.labelS, color = hb.colors.muted)
+    // R5 #32: the legend wraps at narrow widths (≈ 330 dp on one line)
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Dot(cLean, size = 8.dp); Spacer(Modifier.width(4.dp)); Text("Lean mass ${Fmt.num(shown.v, 1)} kg", style = hb.type.labelS, color = hb.colors.text)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Dot(cFat, size = 8.dp); Spacer(Modifier.width(4.dp)); Text("Fat mass ${fatAt?.let { Fmt.num(it, 1) } ?: "–"} kg", style = hb.type.labelS, color = hb.colors.text)
+        }
+        Text("Body fat ${pctAt?.let { Fmt.num(it, 1) } ?: "–"}${com.boudhealth.ui.section.R3Texts.PCT_SP}%", style = hb.type.labelS, color = hb.colors.muted)
     }
     Spacer(Modifier.height(6.dp))
     val t0 = com.boudhealth.ui.components.chartMinutes(start); val t1 = com.boudhealth.ui.components.chartMinutes(end)
@@ -566,64 +565,6 @@ private fun WeightComposition(lean: List<Pt>, fat: List<Pt>, pct: List<Pt>, stat
             val path = androidx.compose.ui.graphics.Path()
             pv.forEachIndexed { i, p -> val y = (size.height * (1 - (p.v - lo) / (hi - lo))).toFloat(); if (i == 0) path.moveTo(x(p), y) else path.lineTo(x(p), y) }
             drawPath(path, txt, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-        }
-    }
-}
-
-@Composable
-private fun WeightSubChart(title: String, unit: String, pts: List<Pt>, color: Color, state: TimeChartState,
-                           start: java.time.LocalDateTime, end: java.time.LocalDateTime) {
-    val hb = LocalHB.current
-    if (pts.size < 2) return
-    val sel = state.point()
-    val selAt = sel?.at
-    val near = selAt?.let { t -> pts.minByOrNull { kotlin.math.abs(java.time.Duration.between(it.at, t).toMinutes()) } }
-    Spacer(Modifier.height(16.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = hb.type.label, color = hb.legible(color), modifier = Modifier.weight(1f))
-        val v = near ?: pts.last()
-        Text("${Fmt.num(v.v, 1)} $unit", style = hb.type.label, color = hb.colors.text)
-    }
-    Spacer(Modifier.height(4.dp))
-    val grid = hb.colors.grid; val mark = hb.colors.text
-    val t0 = com.boudhealth.ui.components.chartMinutes(start); val t1 = com.boudhealth.ui.components.chartMinutes(end)
-    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(64.dp)) {
-        // same horizontal plot box as the main chart: no left gutter, 36 dp right gutter
-        val pr = size.width - 36.dp.toPx()
-        val v0 = if (state.visibleEnd > state.visibleStart) com.boudhealth.ui.components.chartMinutes(state.visibleStart) else t0
-        val v1 = if (state.visibleEnd > state.visibleStart) com.boudhealth.ui.components.chartMinutes(state.visibleEnd) else t1
-        val vis = pts.filter { val m = com.boudhealth.ui.components.chartMinutes(it.at); m in v0..v1 }.ifEmpty { pts }
-        val lo = vis.minOf { it.v }; val hi = vis.maxOf { it.v }
-        val pad = maxOf((hi - lo) * 0.15, 0.5)
-        fun x(p: Pt) = (((com.boudhealth.ui.components.chartMinutes(p.at) - v0) / (v1 - v0).coerceAtLeast(1.0)) * pr).toFloat()
-        fun y(v: Double) = (size.height - ((v - (lo - pad)) / ((hi + pad) - (lo - pad))) * size.height).toFloat()
-        drawLine(grid, androidx.compose.ui.geometry.Offset(0f, size.height - 0.5f), androidx.compose.ui.geometry.Offset(pr, size.height - 0.5f), 1.dp.toPx())
-        val path = androidx.compose.ui.graphics.Path()
-        vis.forEachIndexed { i, p -> val px = x(p).coerceIn(0f, pr); val py = y(p.v); if (i == 0) path.moveTo(px, py) else path.lineTo(px, py) }
-        drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-        if (near != null) {
-            val mx = x(near).coerceIn(0f, pr)
-            drawLine(mark.copy(alpha = 0.4f), androidx.compose.ui.geometry.Offset(mx, 0f), androidx.compose.ui.geometry.Offset(mx, size.height), 1.dp.toPx())
-            drawCircle(color, 4.dp.toPx(), androidx.compose.ui.geometry.Offset(mx, y(near.v)))
-        }
-    }
-}
-
-/** Toggle chips under the weight chart; a chip without data in this period is shown disabled. */
-@Composable
-private fun WeightOverlayChips(d: DetailData, selected: List<String>, onToggle: (String) -> Unit) {
-    val hb = LocalHB.current
-    Spacer(Modifier.height(12.dp))
-    Text("Show with weight", style = hb.type.labelS, color = hb.colors.muted)
-    Spacer(Modifier.height(8.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        WEIGHT_OVERLAYS.forEach { id ->
-            val has = d.extra[id]?.isNotEmpty() == true
-            FilterPill(
-                overlayLabel(id) + if (id == "body_fat") " %" else "", selected = id in selected && has,
-                onClick = { if (has) onToggle(id) }, dot = overlayColor(id),
-                modifier = Modifier.alpha(if (has) 1f else 0.38f),
-            )
         }
     }
 }
@@ -699,7 +640,7 @@ private fun ReadingsList(m: Metric, d: DetailData, model: ChartModel, state: Tim
     val noun = readingNoun(m.id, count)
     val goal = m.goal(prefs.goals)
     val band = d.latest?.band
-    val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
+    val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
 
     SectionHeader(if (isMeasurement(m.id)) "Measurements" else "History")
     Text(
@@ -735,10 +676,10 @@ private fun ReadingsList(m: Metric, d: DetailData, model: ChartModel, state: Tim
                 val prev = model.readings.getOrNull(i - 1) ?: model.before
                 val isSel = i == selRef
                 val sub = buildList {
-                    if (m.id == "weight") r.extras["body_fat"]?.let { add("Body fat ${Fmt.num(it, 1)} %") }
+                    if (m.id == "weight") r.extras["body_fat"]?.let { add("Body fat ${Fmt.num(it, 1)}${com.boudhealth.ui.section.R3Texts.PCT_SP}%") }
                     else historySubtitle(m, r.v, band, goal).first?.takeIf { it != "Weigh-in" && it != "Overnight" }?.let { add(it) }
                 }.joinToString(" · ")
-                val title = Fmt.dayLabel(r.day, today) + if (r.timed) " · " + DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()).format(r.at) else ""
+                val title = Fmt.dayLabel(r.day, today) + if (r.timed) " · " + DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH).format(r.at) else ""
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(HbShapes.tileS)
                         .background(if (isSel) hb.tint(if (color == hb.colors.text) hb.colors.accent else color) else Color.Transparent)
@@ -770,19 +711,6 @@ private fun ReadingsList(m: Metric, d: DetailData, model: ChartModel, state: Tim
 private fun NoData(m: Metric, color: Color, height: androidx.compose.ui.unit.Dp = 216.dp) {
     // V2_TEXTS §4: icon + one line, no second sentence
     EmptyState(metricGlyph(m.id), color, "No data for this period", "", modifier = Modifier.height(height))
-}
-
-@Composable
-private fun Legend(items: List<Pair<String, Color>>) {
-    val hb = LocalHB.current
-    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        items.forEachIndexed { i, (label, c) ->
-            if (i > 0) Spacer(Modifier.width(16.dp))
-            com.boudhealth.ui.components.Dot(c)
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = hb.type.bodyXS, color = hb.colors.muted)
-        }
-    }
 }
 
 // =====================================================================================================================
@@ -836,7 +764,7 @@ private fun MetricHistory(m: Metric, d: DetailData, showAll: Boolean, onToggleAl
     val goal = m.goal(prefs.goals)
     val unit = if (m.id == "sleep") null else shortUnit(m)
     var lastMonth: String? = null
-    val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
+    val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
     Column {
         shown.forEachIndexed { i, p ->
             if (showAll) {

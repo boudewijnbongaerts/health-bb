@@ -64,6 +64,7 @@ import com.boudhealth.ui.section.GhostStyle
 import com.boudhealth.ui.section.R3StatusIcon
 import com.boudhealth.ui.section.R3Texts
 import com.boudhealth.ui.section.ScrubState
+import com.boudhealth.ui.components.plainClickable
 import com.boudhealth.ui.section.SectionContext
 import com.boudhealth.ui.section.TileIcon
 import com.boudhealth.ui.section.drawTri
@@ -74,6 +75,7 @@ import com.boudhealth.ui.theme.Cat
 import com.boudhealth.ui.theme.HB
 import com.boudhealth.ui.theme.LocalHB
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.TextStyle as JTextStyle
 import java.util.Locale
 import kotlin.math.abs
@@ -159,7 +161,7 @@ internal fun BodyHero(ctx: SectionContext) {
     }
     if (ctx.wide) {
         Row(Modifier.fillMaxSize()) {
-            HeroLeft(m, scrub, cover = false, modifier = Modifier.width(296.dp).fillMaxSize())
+            HeroLeft(m, scrub, cover = false, modifier = Modifier.width(296.dp).fillMaxSize(), onOpen = { ctx.openMetric(it) })
             // divider at hero x 340 (content x 318), full content height (hero top 22 … bottom 22)
             Spacer(Modifier.width(22.dp))
             Box(Modifier.width(1.dp).fillMaxSize().background(hb.colors.grid.copy(alpha = 0.8f)))
@@ -168,7 +170,7 @@ internal fun BodyHero(ctx: SectionContext) {
         }
     } else {
         Column(Modifier.fillMaxWidth()) {
-            HeroLeft(m, scrub, cover = true, modifier = Modifier.fillMaxWidth())
+            HeroLeft(m, scrub, cover = true, modifier = Modifier.fillMaxWidth(), onOpen = { ctx.openMetric(it) })
             HeroCharts(ctx, m, scrub, cover = true, modifier = Modifier.fillMaxWidth())
         }
     }
@@ -178,7 +180,7 @@ internal fun BodyHero(ctx: SectionContext) {
 internal fun ScrubState.dayOrNull(): LocalDate? = if (active) day else null
 
 @Composable
-private fun HeroLeft(m: BodyModel, scrub: ScrubState, cover: Boolean, modifier: Modifier) {
+private fun HeroLeft(m: BodyModel, scrub: ScrubState, cover: Boolean, modifier: Modifier, onOpen: (String) -> Unit) {
     val hb = LocalHB.current
     val s = m.scope
     val w = m.changes.getValue(BodyIds.WEIGHT)
@@ -207,7 +209,7 @@ private fun HeroLeft(m: BodyModel, scrub: ScrubState, cover: Boolean, modifier: 
     val ctxY = valueY + if (cover) 22.dp else 28.dp
     val pillY = valueY + if (cover) 46.dp else 58.dp
     Layout(
-        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = a11y },
+        modifier = modifier.plainClickable { onOpen(BodyIds.WEIGHT) }.semantics(mergeDescendants = true) { contentDescription = a11y },
         content = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).background(wColor, CircleShape))
@@ -217,7 +219,7 @@ private fun HeroLeft(m: BodyModel, scrub: ScrubState, cover: Boolean, modifier: 
             Text(valueText, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
             Text(context ?: "", fontSize = (if (cover) 12f else 12.5f).sp, color = hb.colors.muted, maxLines = 1)
             PillFlow(listOfNotNull(pill?.let { it to scrub.pillAlpha }, target?.let { it to 1f }))
-            if (!cover) Mini2x2(m, sd) else Box(Modifier)
+            if (!cover) Mini2x2(m, sd, onOpen) else Box(Modifier)
         },
     ) { ms, c ->
         val W = c.maxWidth
@@ -234,7 +236,7 @@ private fun HeroLeft(m: BodyModel, scrub: ScrubState, cover: Boolean, modifier: 
         val pg = ms[4].measure(c.copy(minWidth = W, maxWidth = W, minHeight = 2 * th + g, maxHeight = 2 * th + g))
         layout(W, H) {
             pl.place(0, labelY.roundToPx() - pl.height / 2)
-            pv.place(-1, valueY.roundToPx() - bl(pv))
+            pv.place(-(2.dp.roundToPx()), valueY.roundToPx() - bl(pv))
             if (context != null) pc.place(0, ctxY.roundToPx() - bl(pc))
             pp.place(0, pillTop)
             if (!cover) pg.place(0, H - pg.height)
@@ -259,7 +261,7 @@ private fun PillFlow(pills: List<Pair<DeltaPillModel, Float>>) {
 
 /** 2×2 tiles: Body fat percentage · Lean mass · Waist · BMI (value 20/700 + unit, ▲●▼ vs the same basis; waist on 1D/1W: its date). */
 @Composable
-private fun Mini2x2(m: BodyModel, scrubDay: LocalDate?) {
+private fun Mini2x2(m: BodyModel, scrubDay: LocalDate?, onOpen: (String) -> Unit) {
     val s = m.scope
     val specs = listOf(BodyIds.FAT_PCT to R3Texts.BODY_FAT, BodyIds.LEAN to R3Texts.LEAN_MASS, BodyIds.WAIST to R3Texts.WAIST_SHORT, BodyIds.BMI to R3Texts.BMI)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -273,7 +275,7 @@ private fun Mini2x2(m: BodyModel, scrubDay: LocalDate?) {
                     val icon = if (scrubDay != null || waistDate || c.diff == null || (c.carried && !s.dayMode)) null else R3MathTone.icon(c.dir) to R3MathTone.of(c)
                     MiniTile(label, cur?.let { R3Texts.dec(it.value, 1) } ?: R3Texts.DASH, hm(id).unit.ifEmpty { null },
                         icon, if (waistDate) R3Texts.dMonRel(cur!!.day, s.end) else null, muted = waistDate || (c.carried && scrubDay == null),
-                        modifier = Modifier.weight(1f).fillMaxSize())
+                        modifier = Modifier.weight(1f).fillMaxSize().plainClickable { onOpen(id) })
                 }
             }
         }
@@ -304,7 +306,7 @@ private fun MiniTile(label: String, value: String, unit: String?, icon: Pair<Til
         layout(W, H) {
             pl.place(14.dp.roundToPx(), 22.dp.roundToPx() - bl(pl))
             pv.place(14.dp.roundToPx(), H - 16.dp.roundToPx() - bl(pv))
-            if (date != null) pe.place(W - 12.dp.roundToPx() - pe.width, H - 14.dp.roundToPx() - bl(pe))
+            if (date != null) pe.place(W - 12.dp.roundToPx() - pe.width, H - 16.dp.roundToPx() - bl(pe))
             else pe.place(W - 21.dp.roundToPx() - pe.width / 2, H - 23.dp.roundToPx() - pe.height / 2)
         }
     }
@@ -372,7 +374,9 @@ private fun HeroCharts(ctx: SectionContext, m: BodyModel, scrub: ScrubState, cov
     val chartH = if (cover) 150.dp else 240.dp
     val compH = if (cover) 54.dp else 70.dp
     val rows = m.comp
-    val shownRow = (scrub.dayOrNull()?.let { d -> rows.firstOrNull { it.day == d } })
+    // legend follows the scrub: 1Y / All by month, otherwise the nearest weigh-in on or before the held day
+    val shownRow = (scrub.dayOrNull()?.let { d ->
+        if (yearStyle || ax.monthly) rows.firstOrNull { YearMonth.from(it.day) == YearMonth.from(d) } else rows.lastOrNull { !it.day.isAfter(d) } })
         ?: ax.hl?.let { h -> rows.firstOrNull { it.i == h } } ?: ax.selI?.let { si -> rows.firstOrNull { it.i == si } } ?: rows.lastOrNull()
     val gesture = Modifier.scrubAndTap(buckets, scrub, { b -> ctx.drill(b.day) }, BODY_GUTTER, true)
     Column(modifier.then(gesture)) {
@@ -401,7 +405,10 @@ private fun HeroCharts(ctx: SectionContext, m: BodyModel, scrub: ScrubState, cov
             val plotW = size.width - BODY_GUTTER.toPx()
             val slot = plotW / max(1, ax.n)
             val sel = scrubI ?: ax.selI
+            ax.weekend.forEach { i -> drawRect(hb.colors.text.copy(alpha = if (hb.dark) 0.022f else 0.016f), Offset(slot * i, 0f), Size(slot, compH.toPx())) }
             drawComp(rows, slot, plotW, compH.toPx(), sel = if (ax.hl == null && !yearStyle) sel else null, hl = ax.hl, wide = yearStyle, hb = hb)
+            // the shared / selected-day cursor runs on through the composition chart (not on 1D)
+            if (ax.hl == null && sel != null) { val sx = slot * sel + slot / 2f; drawLine(hb.colors.text.copy(alpha = 0.35f), Offset(sx, 0f), Offset(sx, compH.toPx()), 1.dp.toPx()) }
             drawAxisLabels(labels, slot, compH.toPx(), todayI, ax.selI, ax.futureFrom, measurer, hb)
         }
     }
@@ -427,9 +434,10 @@ private fun CompLegend(r: CompRow, cover: Boolean) {
         }
     }
     val lines = if (cover) listOf(items.take(2), items.drop(2)) else listOf(items)
-    Column(Modifier.fillMaxWidth().padding(end = BODY_GUTTER), horizontalAlignment = Alignment.End) {
+    // cover: the legend may run over the tick gutter (line 1 is ≈ 240 dp, 218 dp left at a 320 dp screen otherwise)
+    Column(Modifier.fillMaxWidth().padding(end = if (cover) 0.dp else BODY_GUTTER), horizontalAlignment = Alignment.End) {
         lines.filter { it.isNotEmpty() }.forEach { line ->
-            Row(Modifier.height(17.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.height(17.dp), horizontalArrangement = Arrangement.spacedBy(if (cover) 10.dp else 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 line.forEach { (sq, c, nv) -> item(sq, c, nv) }
             }
         }
@@ -470,7 +478,7 @@ private fun DrawScope.drawComp(rows: List<CompRow>, slot: Float, plotW: Float, h
 /** Axis labels under [base]: muted 10.5/700; today = accent circle, selected = text circle, future faint (charts.axis_labels). */
 internal fun DrawScope.drawAxisLabels(labels: List<String?>, slot: Float, base: Float, todayI: Int?, selI: Int?, futureFrom: Int?, measurer: TextMeasurer, hb: HB) {
     val dp = density
-    val cy = base + 3 * dp + 10.5f * 0.62f * dp + 1 * dp
+    val cy = base + 3 * dp + 10.5f * 0.62f * dp
     labels.forEachIndexed { i, t ->
         t ?: return@forEachIndexed
         val cx = slot * i + slot / 2f
@@ -534,7 +542,7 @@ internal fun DrawScope.drawBodyLine(sp: BodyLineSpec, measurer: TextMeasurer, hb
     fun Y(v: Double) = (top + (base - top) * (1.0 - (v - lo) / (hi - lo))).toFloat()
     val c = sp.color
     // grid + ticks in the right gutter
-    val tickStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.W400, color = hb.colors.muted.copy(alpha = 0.85f), fontFeatureSettings = "tnum")
+    val tickStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.85f), fontFeatureSettings = "tnum")
     niceTicks(lo, hi, sp.ticksN).filter { it in lo..hi }.forEach { t ->
         val ty = Y(t)
         if (abs(ty - base) > 1 * dp) drawLine(hb.colors.grid.copy(alpha = if (hb.dark) 0.45f else 0.9f), Offset(0f, ty), Offset(plotW, ty), 0.6f * dp)

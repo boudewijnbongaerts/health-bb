@@ -49,23 +49,33 @@ class DetailData(
     val extra: Map<String, List<Pt>> = emptyMap(),
     /** v4 Q23: real readings + level-of-detail chart levels for the interactive chart (null for lean_fat). */
     val chart: ChartModel? = null,
+    /** R6 item 1: 1D on a one-value page: the day's value, or the newest one before it (carried). Null otherwise. */
+    val dayPick: com.boudhealth.data.DayView.Pick? = null,
+    /** R6 item 1: 1D of a one-value metric (hero = [dayPick], chart / stats / list = the 7 days ending on the day). */
+    val dayView: Boolean = false,
 )
 
 suspend fun loadDetail(context: Context, m: Metric, w: Window): DetailData {
     val env = MetricEnv.load(context)
     return withContext(Dispatchers.IO) {
         val today = env.today
-        val last = HealthPeriods.lastDay(w, today)
         val inPast = !w.start.isAfter(today)
+        // R6 item 1: 1D of a one-value metric loads the 7 days ending on the day (chart, stats, list); [w] stays the day
+        val oneDay = w.range == Range.DAY && com.boudhealth.data.DayView.isOneValue(m.id)
+        val cw = if (oneDay) com.boudhealth.data.DayView.chartWindow(w) else w
+        val last = HealthPeriods.lastDay(cw, today)
         // weekly buckets (1Y lines) start on a Monday: widen the series window to the Monday on or before its start
         val sw = if (w.range == Range.YEAR) w.copy(start = w.start.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))) else w
-        val series = if (m.id == "lean_fat" || !inPast) emptyList() else Metrics.series(env, m.id, sw)
-        val pd = if (!inPast) emptyList() else Metrics.daily(env, m.id, w.start, last)
+        val pd = if (!inPast) emptyList() else Metrics.daily(env, m.id, cw.start, last)
+        val series = if (m.id == "lean_fat" || !inPast) emptyList() else if (oneDay) pd else Metrics.series(env, m.id, sw)
+        val dayPick = if (!oneDay || !inPast) null else com.boudhealth.data.DayView.pick(pd, w.start) {
+            Metrics.daily(env, m.id, com.boudhealth.data.ALL_START, cw.start.minusDays(1)).lastOrNull()
+        }
         val prev = if (w.range == Range.ALL) emptyList() else HealthPeriods.previous(w).let { (a, b) -> Metrics.daily(env, m.id, a, b) }
         val latest = Metrics.latest(env, m.id)
         val hist = Metrics.daily(env, m.id, today.minusDays(400), today)
         val extra = when {
-            m.id == "lean_fat" && inPast -> mapOf("lean_mass" to Metrics.daily(env, "lean_mass", w.start, last))
+            m.id == "lean_fat" && inPast -> mapOf("lean_mass" to Metrics.daily(env, "lean_mass", cw.start, last))
             m.id == "hr" && w.range != Range.DAY -> com.boudhealth.data.V4.hrDailyRange(env, w.start, last).let { r ->
                 mapOf("hr_min" to r.map { Pt(it.day, it.min) }, "hr_max" to r.map { Pt(it.day, it.max) })
             }
@@ -73,7 +83,7 @@ suspend fun loadDetail(context: Context, m: Metric, w: Window): DetailData {
             m.id == "vo2" -> com.boudhealth.data.V4.vo2Change(env)?.change?.let { mapOf("vo2_change" to listOf(Pt(today, it))) } ?: emptyMap()
             // v3 D7: weight overlays, bucketed exactly like the weight line (same Withings-first body source rules)
             // v6 I4: composition per weigh-in (lean kg, fat kg = weight − lean, fat %), as delivered
-            m.id == "weight" && inPast -> com.boudhealth.data.V4.composition(env, w.start, last).let { c ->
+            m.id == "weight" && inPast -> com.boudhealth.data.V4.composition(env, cw.start, last).let { c ->
                 fun at(x: com.boudhealth.data.WeighIn) = java.time.Instant.ofEpochMilli(x.time).atZone(env.zone).toLocalDateTime()
                 mapOf(
                     "comp_lean" to c.mapNotNull { x -> x.leanKg?.let { Pt(at(x), it) } },
@@ -83,8 +93,8 @@ suspend fun loadDetail(context: Context, m: Metric, w: Window): DetailData {
             }
             else -> emptyMap()
         }
-        val chart = if (m.id == "lean_fat" || !inPast) null else buildChartModel(env, m, w, series, today)
-        DetailData(w, series, pd, prev, latest, hist, extra, chart)
+        val chart = if (m.id == "lean_fat" || !inPast) null else buildChartModel(env, m, cw, series, today)
+        DetailData(w, series, pd, prev, latest, hist, extra, chart, dayPick, oneDay)
     }
 }
 
@@ -148,7 +158,8 @@ fun heroFor(m: Metric, d: DetailData, goals: Goals, today: LocalDate = LocalDate
     fun vsStart(v: Double?): List<Delta> {
         val first = d.periodDaily.firstOrNull() ?: return emptyList()
         if (v == null || d.periodDaily.size < 2) return emptyList()
-        return listOf(deltaPill(v - first.v, m, HealthPeriods.agoPhrase(w, first.date)))
+        // R5 #40: the same pill form as the tabs: "0.4 kg vs 4 Oct" / "Same as 4 Oct" (year when not this year)
+        return listOf(deltaPill(v - first.v, m, "vs " + com.boudhealth.ui.section.R3Texts.dMonRel(first.date, today)))
     }
 
     return when {
@@ -211,8 +222,9 @@ fun heroFor(m: Metric, d: DetailData, goals: Goals, today: LocalDate = LocalDate
                 v != null && goal != null -> {
                     val gap = v - goal
                     val f = Math.pow(10.0, m.decimals.toDouble())
-                    if (Math.round(abs(gap) * f) == 0L) "${whenText ?: ""} · on your goal".trimStart(' ', '·')
-                    else "${whenText ?: ""} · ${withUnit(Fmt.num(abs(gap), m.decimals), shortUnit(m) ?: "")} to your goal of ${Fmt.num(goal, if (goal % 1.0 == 0.0) 0 else 1)}".trimStart(' ', '·', ' ')
+                    // R5 #40: approved target texts ("{n} kg to target" / "Target reached")
+                    if (Math.round(abs(gap) * f) == 0L) "${whenText ?: ""} · Target reached".trimStart(' ', '·')
+                    else "${whenText ?: ""} · ${withUnit(Fmt.num(abs(gap), m.decimals), shortUnit(m) ?: "")} to target".trimStart(' ', '·', ' ')
                 }
                 else -> whenText
             }
@@ -221,16 +233,9 @@ fun heroFor(m: Metric, d: DetailData, goals: Goals, today: LocalDate = LocalDate
     }
 }
 
-private fun pctDelta(v: Double, ref: Double, m: Metric, phrase: String): Delta {
-    if (ref <= 0) return Delta(phrase, DeltaKind.Neutral)
-    val p = (v - ref) / ref * 100.0
-    if (abs(p) < 1) return Delta("Same as ${phrase.removePrefix("vs ")}", DeltaKind.Neutral)
-    return Delta("${Fmt.num(abs(p))}% $phrase", deltaKind(p, m.higherIsBetter, 3.0), deltaDir(p, 1.0))
-}
-
 /** Scrub date label for a chart point of this window. */
 fun scrubDate(p: Pt, w: Window, today: LocalDate = LocalDate.now()): String {
-    val loc = Locale.getDefault()
+    val loc = Locale.ENGLISH
     return when (w.range) {
         Range.DAY -> "${DateTimeFormatter.ofPattern("HH:mm", loc).format(p.at)}–${DateTimeFormatter.ofPattern("HH:mm", loc).format(p.at.plusHours(1))}"
         Range.WEEK, Range.MONTH, Range.QUARTER -> Fmt.dayLabel(p.date, today)
@@ -255,7 +260,7 @@ fun barBucket(d: DetailData, today: LocalDate = LocalDate.now()): Period = when 
 
 /** Tooltip date for a bar starting at [x] with [bucket]: day label, "Week of 3 Nov", "November 2026", "2025". */
 fun barDate(x: LocalDateTime, bucket: Period, w: Window, today: LocalDate = LocalDate.now()): String {
-    val loc = Locale.getDefault()
+    val loc = Locale.ENGLISH
     return when {
         w.range == Range.DAY -> scrubDate(Pt(x, 0.0), w, today)
         bucket.years > 0 -> x.year.toString()
@@ -271,7 +276,7 @@ fun barDate(x: LocalDateTime, bucket: Period, w: Window, today: LocalDate = Loca
  */
 fun buildBars(d: DetailData, averageNights: Boolean = false, today: LocalDate = LocalDate.now()): List<Bar> {
     val w = d.window
-    val loc = Locale.getDefault()
+    val loc = Locale.ENGLISH
     if (w.range == Range.DAY) {
         val byHour = d.series.associate { it.at.hour to it.v }
         val now = LocalDateTime.now()
@@ -560,7 +565,7 @@ fun bucketize(pts: List<TPoint>, grain: ChartGrain, totals: Boolean, domainStart
     return out
 }
 
-private val LOC: Locale get() = Locale.getDefault()
+private val LOC: Locale get() = Locale.ENGLISH
 
 /** "Thu 3 Oct 2026" (+ " · 07:12" when the source gives a time). */
 fun readingTitle(r: Reading): String =

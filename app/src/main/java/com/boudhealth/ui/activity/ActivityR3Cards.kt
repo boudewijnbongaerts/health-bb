@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.paddingFromBaseline
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +68,7 @@ import com.boudhealth.ui.components.plainClickable
 import com.boudhealth.ui.health.metricColor
 import com.boudhealth.ui.health.vo2Scale
 import com.boudhealth.ui.nav.Route
+import com.boudhealth.ui.section.R3Base
 import com.boudhealth.ui.section.CardSize
 import com.boudhealth.ui.section.CardSpec
 import com.boudhealth.ui.section.CoverStatRow
@@ -249,11 +251,13 @@ private fun WorkoutsCard(ctx: SectionContext) {
         if (n > 0) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Text(R3Texts.int(n.toDouble()), fontSize = fs.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1,
-                    style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.paddingFromBaseline(top = b0.dp))
+                    style = R3Base, modifier = Modifier.paddingFromBaseline(top = b0.dp))
                 Spacer(Modifier.width(14.dp))
                 pw!!.types.take(2).forEach { (g, k) ->
-                    Text(R3Texts.typeChip(g.label, k), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.text, maxLines = 1,
-                        modifier = Modifier.padding(bottom = 7.dp).height(22.dp).background(hb.colors.tile, RoundedCornerShape(11.dp)).padding(horizontal = 9.dp, vertical = 3.dp))
+                    Box(Modifier.padding(bottom = 7.dp).height(22.dp).background(hb.colors.tile, RoundedCornerShape(11.dp)).padding(horizontal = 9.dp),
+                        contentAlignment = Alignment.Center) {
+                        Text(R3Texts.typeChip(g.label, k), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.text, maxLines = 1)
+                    }
                     Spacer(Modifier.width(6.dp))
                 }
             }
@@ -261,7 +265,8 @@ private fun WorkoutsCard(ctx: SectionContext) {
             m.sessionRows.forEach { r -> SessionRowView(ctx, r, withDate = m.p !is SectionPeriod.Day) }
             if (n > 3 || m.p !is SectionPeriod.Day) {
                 if (ctx.wide) Spacer(Modifier.weight(1f)) else Spacer(Modifier.height(8.dp))
-                Row(Modifier.align(Alignment.End).height(26.dp).plainClickable { SectionHooks.openWorkouts(ctx.nav, ctx.period) },
+                // 26 visual / 48 touch: requiredHeight overflows the 26 slot evenly, so the text stays where it was
+                Row(Modifier.align(Alignment.End).height(26.dp).requiredHeight(48.dp).plainClickable { SectionHooks.openWorkouts(ctx.nav, ctx.period) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(R3Texts.all(n), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.accent)
                     Spacer(Modifier.width(3.dp))
@@ -286,23 +291,23 @@ private fun WorkoutsCard(ctx: SectionContext) {
     }
 }
 
-/** One session row (pitch 46): glyph circle 30 · name 13.5/700 + time 12 muted · "{n} min" 13.5/700 + "Avg HR {n}" 12 muted. */
+/** One session row (pitch 46): glyph circle 34 · name 13.5/700 + time 11.5 muted · "{n} min" 13.5/700 + "Avg HR {n}" 11.5 muted (hbb.workout_row). */
 @Composable
 private fun SessionRowView(ctx: SectionContext, r: SessionRow, withDate: Boolean) {
     val hb = LocalHB.current
     val w = r.workout
     val time = if (withDate) R3Texts.sessionTime(r.day, r.start) else R3Texts.hhmm(r.start)
     Row(Modifier.fillMaxWidth().height(46.dp).plainClickable { ctx.nav.push(Route.Session(w.start)) }, verticalAlignment = Alignment.CenterVertically) {
-        GlyphCircle(WorkoutUi.glyph(w), WorkoutUi.color(w), size = 30.dp, glyphSize = 16.dp)
+        GlyphCircle(WorkoutUi.glyph(w), WorkoutUi.color(w), size = 34.dp, glyphSize = 19.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(WorkoutUi.name(w), fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(time, fontSize = 12.sp, color = hb.colors.muted, maxLines = 1)
+            Text(time, fontSize = 11.5.sp, color = hb.colors.muted, maxLines = 1)
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
             Text(R3Texts.minutes(w.minutes.toDouble()), fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1)
-            r.avgHr?.let { Text(R3Texts.avgHr(it), fontSize = 12.sp, color = hb.colors.muted, maxLines = 1) }
+            r.avgHr?.let { Text(R3Texts.avgHr(it), fontSize = 11.5.sp, color = hb.colors.muted, maxLines = 1) }
         }
     }
 }
@@ -369,7 +374,7 @@ private fun ZoneRail(m: ActR3) {
                 Text(buildAnnotatedString {
                     withStyle(SpanStyle(fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(R3Texts.int(m.heart.zoneMinutes[i].toDouble())) }
                     withStyle(SpanStyle(fontSize = 11.5.sp, color = hb.colors.muted)) { append(" $unit") }
-                }, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
+                }, maxLines = 1, style = R3Base)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -385,7 +390,7 @@ private fun ZoneRail(m: ActR3) {
                 Text(buildAnnotatedString {
                     withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(R3Texts.int(w.points.toDouble())) }
                     withStyle(SpanStyle(fontSize = 12.sp, color = hb.colors.muted)) { append(" ${slashGoal(w.target.toDouble())}") }
-                }, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
+                }, maxLines = 1, style = R3Base)
                 Spacer(Modifier.weight(1f))
                 Text(R3Texts.week(w.monday), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, maxLines = 1)
             }
@@ -454,7 +459,7 @@ private fun SleepDayLeft(n: SleepNight, stages: List<SleepStage>, cover: Boolean
                 withStyle(SpanStyle(fontSize = big, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(num) }
                 withStyle(SpanStyle(fontSize = small, color = hb.colors.muted)) { append(" $u") }
             }
-        }, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = b0.dp), style = TextStyle(fontFeatureSettings = "tnum"))
+        }, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = b0.dp), style = R3Base)
         Text(R3Texts.timeRange(localTime(n.info.start), localTime(n.info.end)), fontSize = 12.5.sp, color = hb.colors.muted, maxLines = 1,
             modifier = Modifier.paddingFromBaseline(top = 22.dp))
         Spacer(Modifier.height(10.dp))
@@ -500,7 +505,7 @@ private fun SleepPeriodLeft(ctx: SectionContext, m: ActR3, cover: Boolean) {
             withStyle(SpanStyle(fontSize = fs, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(R3Texts.hm(s.shortest ?: 0.0)) }
             withStyle(SpanStyle(fontSize = fs * 0.62f, fontWeight = FontWeight.Bold, color = hb.colors.muted)) { append("  –  ") }
             withStyle(SpanStyle(fontSize = fs, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(R3Texts.hm(s.longest ?: 0.0)) }
-        }, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = b0.dp), style = TextStyle(fontFeatureSettings = "tnum"))
+        }, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = b0.dp), style = R3Base)
         Row(Modifier.fillMaxWidth().paddingFromBaseline(top = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(R3Texts.nights(s.nights.size), fontSize = 12.5.sp, color = hb.colors.muted, maxLines = 1, modifier = Modifier.weight(1f))
             if (perNight && s.ghost != null) R3Texts.ghostWord(m.p, m.today)?.let { GhostKey(GhostKeyModel(it, GhostKind.BAR)) }
@@ -519,7 +524,7 @@ private fun SleepRail(m: ActR3) {
     Column(Modifier.fillMaxSize()) {
         Text(R3Texts.BEDTIMES, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, modifier = Modifier.paddingFromBaseline(top = 20.dp))
         Text(s.bedtimes?.let { R3Texts.timeRange(it.earliest, it.latest) } ?: R3Texts.DASH, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            color = hb.colors.text, modifier = Modifier.paddingFromBaseline(top = 21.dp), style = TextStyle(fontFeatureSettings = "tnum"))
+            color = hb.colors.text, modifier = Modifier.paddingFromBaseline(top = 21.dp), style = R3Base)
         Spacer(Modifier.height(13.dp))
         Box(Modifier.fillMaxWidth().height(1.dp).background(hb.colors.grid))
         Spacer(Modifier.height(11.dp))
@@ -546,8 +551,8 @@ private fun SleepBars(ctx: SectionContext, m: ActR3, modifier: Modifier) {
     val byDay = remember(m) { m.sleep.nights.associateBy { it.date } }
     val days = remember(m) { (0 until m.p.totalDays()).map { m.p.start.plusDays(it.toLong()) } }
     val cols = ActivityColors.stages(hb)
-    val labelStyle = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
-    val tickStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.8f))
+    val labelStyle = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+    val tickStyle = R3Base.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.8f))
     val buckets = remember(m) { days.map { d -> SeriesBucket(d.atStartOfDay(), d.plusDays(1).atStartOfDay(), byDay[d]?.info?.asleepMin?.toDouble(), future = d.isAfter(m.today)) } }
     Canvas(modifier.pointerInput(m) {
         detectTapGestures { o ->
@@ -601,10 +606,10 @@ private fun SleepBars(ctx: SectionContext, m: ActR3, modifier: Modifier) {
             val b = buckets[i]
             val lbl = axisLabel(b, i, n, Grain.DAY, m.p) ?: return@forEachIndexed
             val today = isTodayBucket(b, Grain.DAY, m.today)
-            val t = measurer.measure(lbl, labelStyle.copy(color = if (today) hb.colors.onAccent else hb.colors.muted))
-            val ly = base + 3f * dp
-            if (today) drawCircle(hb.colors.accent, max(t.size.width, t.size.height) / 2f + 3f * dp, Offset(cx, ly + t.size.height / 2f))
-            drawText(t, topLeft = Offset(cx - t.size.width / 2f, ly))
+            val t = measurer.measure(lbl, labelStyle.copy(color = if (today) hb.colors.onAccent else hb.colors.muted, fontSize = if (today) 10.sp else labelStyle.fontSize))
+            val lc = base + 12.5f * dp   // kit6.bars: fixed r 9 today circle, clear of the axis line
+            if (today) drawCircle(hb.colors.accent, 9f * dp, Offset(cx, lc))
+            drawText(t, topLeft = Offset(cx - t.size.width / 2f, lc - t.size.height / 2f))
         }
     }
 }
@@ -616,8 +621,8 @@ private fun SleepRanges(ctx: SectionContext, m: ActR3, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
     val s = ctx.card("sleep")?.series ?: return
     val color = ActivityColors.sleep(hb)
-    val labelStyle = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
-    val tickStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.8f))
+    val labelStyle = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+    val tickStyle = R3Base.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.8f))
     val bs = s.buckets
     Canvas(modifier.pointerInput(bs) {
         detectTapGestures { o ->
@@ -655,10 +660,10 @@ private fun SleepRanges(ctx: SectionContext, m: ActR3, modifier: Modifier) {
             }
             val lbl = axisLabel(b, i, n, s.grain, m.p) ?: return@forEachIndexed
             val today = isTodayBucket(b, s.grain, m.today)
-            val t = measurer.measure(lbl, labelStyle.copy(color = if (today) hb.colors.onAccent else if (b.future) hb.faint else hb.colors.muted))
-            val ly = base + 3f * dp
-            if (today) drawCircle(hb.colors.accent, max(t.size.width, t.size.height) / 2f + 3f * dp, Offset(cx, ly + t.size.height / 2f))
-            drawText(t, topLeft = Offset(cx - t.size.width / 2f, ly))
+            val t = measurer.measure(lbl, labelStyle.copy(color = if (today) hb.colors.onAccent else if (b.future) hb.faint else hb.colors.muted, fontSize = if (today) 10.sp else labelStyle.fontSize))
+            val lc = base + 12.5f * dp   // kit6.bars: fixed r 9 today circle, clear of the axis line
+            if (today) drawCircle(hb.colors.accent, 9f * dp, Offset(cx, lc))
+            drawText(t, topLeft = Offset(cx - t.size.width / 2f, lc - t.size.height / 2f))
         }
     }
 }
@@ -675,7 +680,7 @@ private fun Hypnogram(stages: List<SleepStage>, night: SleepNight, modifier: Mod
     val segs = stages.filter { it.end > it.start }
     if (segs.isEmpty()) { Box(modifier); return }
     val t0 = minOf(night.info.start, segs.minOf { it.start }); val t1 = maxOf(night.info.end, segs.maxOf { it.end })
-    val label = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+    val label = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
     Canvas(modifier) {
         val left = 44.dp.toPx(); val axisH = 18.dp.toPx()
         val w = size.width - left; val laneH = (size.height - axisH) / lanes.size
@@ -716,7 +721,9 @@ private fun StreakCardView(ctx: SectionContext) {
     val hb = LocalHB.current
     val s = m.streak
     val flame = ActivityColors.flame(hb)
-    R3CardFrame(R3Texts.STREAK, Glyph.Flame, flame, info = ActivityTexts.INFO_WORKOUT_DAYS, onClick = { ctx.openMetric("streak") }) {
+    // (i) text built from the saved workout-day rule (as Settings and the streak detail)
+    val info = com.boudhealth.ui.section.InfoText(ActivityTexts.INFO_WORKOUT_DAYS.title, com.boudhealth.ui.settings.infoWorkoutDays(com.boudhealth.ui.nav.LocalPrefs.current.goals))
+    R3CardFrame(R3Texts.STREAK, Glyph.Flame, flame, info = info, onClick = { ctx.openMetric("streak") }) {
         Row(Modifier.fillMaxWidth().height(80.dp)) {
             Box(Modifier.padding(top = 2.dp)) { FlameRing((s.current.toFloat() / max(s.best, 1)).coerceIn(0f, 1f), 56.dp) }
             Spacer(Modifier.width(14.dp))
@@ -737,7 +744,7 @@ private fun StreakCardView(ctx: SectionContext) {
                         withStyle(SpanStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(num) }
                         if (goalPart != null) withStyle(SpanStyle(fontSize = 18.6.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)) { append(" $goalPart") }
                         withStyle(SpanStyle(fontSize = 15.sp, color = hb.colors.muted)) { append(" $words") }
-                    }, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = 34.dp), style = TextStyle(fontFeatureSettings = "tnum"))
+                    }, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = 34.dp), style = R3Base)
                     Text(R3Texts.streakLine(s.current, s.best), fontSize = 12.5.sp, color = hb.colors.muted, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = 12.dp))
                 }
             }
@@ -798,7 +805,7 @@ private fun StreakDots(ctx: SectionContext, m: ActR3, modifier: Modifier) {
                 else -> null to if (d.isAfter(m.today)) hb.faint else hb.colors.muted
             }
             if (bg != null) drawCircle(bg, 9f * dp, Offset(c, ly))
-            val t = measurer.measure(lab, TextStyle(fontSize = (if (bg != null) 10f else 10.5f).sp, fontWeight = FontWeight.Bold, color = fg))
+            val t = measurer.measure(lab, R3Base.copy(fontSize = (if (bg != null) 10f else 10.5f).sp, fontWeight = FontWeight.Bold, color = fg))
             drawText(t, topLeft = Offset(c - t.size.width / 2f, ly - t.size.height / 2f))
         }
     }
@@ -895,9 +902,9 @@ private fun Vo2Chart(m: ActR3, color: Color, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
     val v = m.vo2
     val cuts = remember(v.birthYear) { vo2Scale(v.birthYear).cuts }
-    val tickStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.85f), fontFeatureSettings = "tnum")
-    val labelStyle = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
-    val tagStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum")
+    val tickStyle = R3Base.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.85f), fontFeatureSettings = "tnum")
+    val labelStyle = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+    val tagStyle = R3Base.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum")
     Canvas(modifier.semantics { contentDescription = R3Texts.VO2 }) {
         val vals = v.values
         val pts = vals.withIndex().filter { it.value != null }.map { it.index to it.value!! }
@@ -993,7 +1000,7 @@ private fun AllValuesR3Card(ctx: SectionContext) {
                     Text(buildAnnotatedString {
                         withStyle(SpanStyle(fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = if (r.carried) hb.colors.muted else hb.colors.text)) { append(R3Texts.dec(r.value, dec)) }
                         if (unit.isNotEmpty()) withStyle(SpanStyle(fontSize = 11.5.sp, color = hb.colors.muted)) { append(" $unit") }
-                    }, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
+                    }, maxLines = 1, style = R3Base)
                 }
             }
         }

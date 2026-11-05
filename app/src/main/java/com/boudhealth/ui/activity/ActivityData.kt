@@ -73,7 +73,7 @@ internal object WorkoutUi {
 
     /** "Today" / "Yesterday" / "Wednesday" (this week) / "Tue 27 Oct" + secondary date text (or null). */
     fun dayHeader(d: LocalDate, today: LocalDate = LocalDate.now()): Pair<String, String?> {
-        val loc = Locale.getDefault()
+        val loc = Locale.ENGLISH
         val days = ChronoUnit.DAYS.between(d, today)
         return when {
             days == 0L -> "Today" to DateTimeFormatter.ofPattern("EEE d MMM", loc).format(d)
@@ -233,7 +233,7 @@ internal data class WorkoutsPage(
 )
 
 private fun slotsFor(w: Window, firstDay: LocalDate?, now: LocalDateTime): Pair<List<Slot>, Int> {
-    val loc = Locale.getDefault()
+    val loc = Locale.ENGLISH
     val today = now.toLocalDate()
     val dm = DateTimeFormatter.ofPattern("EEE d MMM", loc)
     val out = ArrayList<Slot>()

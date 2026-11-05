@@ -37,6 +37,8 @@ object ClockViews {
             }
             setTextViewTextSize(R.id.hb_clock_date, dp, g.dateSize)
             setViewLayoutMargin(R.id.hb_clock_date, RemoteViews.MARGIN_TOP, g.dateTop, dp)
+            // wide: indent the date by the time font's side bearing so its left edge meets the digits' ink (0 otherwise)
+            setViewLayoutMargin(R.id.hb_clock_date, RemoteViews.MARGIN_START, ClockPaint.dateIndent(g, ClockPaint.measure(f)), dp)
             if (f.dateAccent) setColorInt(R.id.hb_clock_date, "setTextColor", accentDay, accentNight)
             else setColorInt(R.id.hb_clock_date, "setTextColor", inkDay, inkNight)
             setViewVisibility(R.id.hb_clock_date, if (showDate) View.VISIBLE else View.GONE)

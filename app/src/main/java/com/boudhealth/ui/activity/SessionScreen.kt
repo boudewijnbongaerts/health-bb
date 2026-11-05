@@ -92,7 +92,7 @@ fun SessionScreen(start: Long, nav: Nav) {
     val collapsed by remember(density) { derivedStateOf { with(density) { scroll.value > 120.dp.toPx() && !com.boudhealth.ui.debug.TourScroll.active } } }
     val d = data
 
-    Box(Modifier.fillMaxSize().background(hb.colors.surface)) {
+    Box(Modifier.fillMaxSize().background(hb.colors.bgDim)) {   // R5 #34: bgDim page + card groups, as every detail page
         Column(Modifier.fillMaxSize().verticalScroll(scroll), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(Modifier.screenContent(screen.gutter)) {
                 Spacer(Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp))
@@ -107,7 +107,7 @@ fun SessionScreen(start: Long, nav: Nav) {
             }
         }
         AnimatedVisibility(collapsed, enter = fadeIn(tween(150)), exit = fadeOut(tween(150))) {
-            CollapsedHeaderBar(d?.let { WorkoutUi.name(it.workout) } ?: "Workout", { nav.back() }, emptyList())
+            CollapsedHeaderBar(d?.let { WorkoutUi.name(it.workout) } ?: "Workout", { nav.back() }, emptyList(), background = hb.colors.bgDim)
         }
     }
 }
@@ -161,7 +161,7 @@ private fun SessionContent(d: SessionData, nav: Nav) {
                 Modifier.weight(1f), onClick = { nav.openMetric("zone_min") })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricTile("Avg heart rate", Cat.heart, d.avgHr?.toString() ?: "–", "bpm", null, Modifier.weight(1f))
+            MetricTile("Avg HR", Cat.heart, d.avgHr?.toString() ?: "–", "bpm", null, Modifier.weight(1f))
             MetricTile("Max heart rate", Cat.heart, d.max?.bpm?.toString() ?: "–", "bpm", d.max?.let { "at ${Fmt.hm(it.ms)}" }, Modifier.weight(1f))
         }
     }
@@ -184,7 +184,7 @@ private fun SessionContent(d: SessionData, nav: Nav) {
 
     // ---- details
     Text("Details", style = hb.type.label, color = hb.colors.muted, modifier = Modifier.padding(top = 28.dp, bottom = 8.dp, start = 4.dp))
-    Column(Modifier.fillMaxWidth().background(hb.colors.tile, HbShapes.group)) {
+    Column(Modifier.fillMaxWidth().background(hb.colors.card, HbShapes.group)) {
         DetailRow("Activity type", null, WorkoutUi.name(w), onClick = null)
         Cut()
         DetailRow("Heart-rate zones", "Max ${d.limits.hrMax} · Rest ${d.limits.rest.roundToInt()} bpm", null,
@@ -195,14 +195,14 @@ private fun SessionContent(d: SessionData, nav: Nav) {
 @Composable
 private fun Cut() {
     val hb = LocalHB.current
-    Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(hb.colors.surface))
+    Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(hb.colors.grid))
 }
 
 @Composable
 private fun MetricTile(label: String, dot: Color, value: String, unit: String, sub: String?, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     val hb = LocalHB.current
     val m = if (onClick != null) modifier.hbClickable(shape = HbShapes.tile, onClick = onClick) else modifier
-    Column(m.background(hb.colors.tile, HbShapes.tile).heightIn(min = 96.dp).padding(horizontal = 16.dp, vertical = 14.dp)) {
+    Column(m.background(hb.colors.card, HbShapes.tile).heightIn(min = 96.dp).padding(horizontal = 16.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Dot(dot)
             Spacer(Modifier.width(8.dp))
@@ -230,8 +230,8 @@ private fun ZoneBar(minutes: IntArray) {
 private fun ZoneList(d: SessionData) {
     val hb = LocalHB.current
     val l = d.limits
-    val ranges = listOf("under ${l.fat} bpm", "${l.fat}–${l.cardio - 1} bpm", "${l.cardio}–${l.peak - 1} bpm", "${l.peak}+ bpm")
-    Column(Modifier.fillMaxWidth().background(hb.colors.tile, HbShapes.group)) {
+    val ranges = listOf("under ${l.fat} bpm", "${l.fat}–${l.cardio - 1} bpm", "${l.cardio}–${l.peak - 1} bpm", "≥ ${l.peak} bpm")
+    Column(Modifier.fillMaxWidth().background(hb.colors.card, HbShapes.group)) {
         for ((i, z) in listOf(3, 2, 1, 0).withIndex()) {
             val mins = d.zoneMinutes[z]
             Row(
@@ -247,7 +247,7 @@ private fun ZoneList(d: SessionData) {
                 if (z > 0 && mins > 0) {
                     val mult = if (z == 1) "×1 pts" else "×2 pts"
                     Text(
-                        mult, style = hb.type.labelS, color = hb.legible(hb.palette.intensity.first, hb.colors.tile),
+                        mult, style = hb.type.labelS, color = hb.legible(hb.palette.intensity.first, hb.colors.card),
                         modifier = Modifier.background(hb.tint(hb.palette.intensity.first), RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
                     )
                     Spacer(Modifier.width(14.dp))

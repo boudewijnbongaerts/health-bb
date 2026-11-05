@@ -69,10 +69,10 @@ object SFmt {
     fun dec(v: Double, decimals: Int = 1): String = String.format(Locale.US, "%,.${decimals}f", v)
     fun num(v: Double, decimals: Int): String = if (decimals <= 0) int(v) else dec(v, decimals)
 
-    /** Ring pills / hero totals: full number below 100,000; "1.98M" / "412K" above. */
+    /** Ring pills / hero totals: full number below 100,000; "1.98M" / "412k" above. */
     fun compact(v: Double): String = when {
         abs(v) >= 1_000_000 -> String.format(Locale.US, "%.2fM", v / 1_000_000.0).replace(".00M", "M")
-        abs(v) >= 100_000 -> String.format(Locale.US, "%.0fK", v / 1_000.0)
+        abs(v) >= 100_000 -> String.format(Locale.US, "%.0fk", v / 1_000.0)
         else -> int(v)
     }
 
@@ -159,7 +159,7 @@ fun Headline(value: String, goal: String? = null, unit: String? = null, modifier
         withStyle(SpanStyle(fontSize = size.sp, fontWeight = FontWeight.Bold, color = if (muted) hb.colors.muted else hb.colors.text)) { append(value) }
         if (goal != null) withStyle(SpanStyle(fontSize = (size * 0.62f).sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)) { append(" / $goal") }
         if (unit != null) withStyle(SpanStyle(fontSize = (size * 0.5f).sp, fontWeight = FontWeight.Normal, color = hb.colors.muted)) { append(" $unit") }
-    }, modifier = modifier, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum", lineHeight = (size * 1.2f).sp))
+    }, modifier = modifier, maxLines = 1, style = R3Base.copy(lineHeight = (size * 1.2f).sp))
 }
 
 // =====================================================================================================================
@@ -253,9 +253,9 @@ fun PeriodBars(
     val rawMax = max(max(curMax, ghostMax), if (segmentColors == null) goal ?: 0.0 else 0.0).coerceAtLeast(1e-6)
     val ticks0 = remember(rawMax) { com.boudhealth.ui.components.niceTicks(0.0, rawMax, 3).filter { it > 0 } }
     val maxV = max(max(rawMax, ticks0.lastOrNull() ?: rawMax), if (tagHighest) curMax * 1.16 else 0.0)
-    val labelStyle = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
-    val valueStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted, fontFeatureSettings = "tnum")
-    val tickStyle = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.8f), fontFeatureSettings = "tnum")
+    val labelStyle = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+    val valueStyle = R3Base.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted, fontFeatureSettings = "tnum")
+    val tickStyle = R3Base.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted.copy(alpha = 0.8f), fontFeatureSettings = "tnum")
     var hold by remember(buckets) { androidx.compose.runtime.mutableStateOf<Int?>(null) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val gutterPx = with(density) { if (yAxis) 28.dp.toPx() else 0f }
@@ -359,17 +359,13 @@ fun PeriodBars(
                 val lbl = axisLabel(b, i, n, grain, period) ?: return@forEachIndexed
                 val isToday = isTodayBucket(b, grain, today)
                 val isSel = selected != null && b.day == selected && grain == Grain.DAY
-                val t = measurer.measure(lbl, labelStyle.copy(color = if (isToday || isSel) hb.colors.onAccent else hb.colors.muted))
-                val ly = baseY + 3.dp.toPx()
-                if (isToday || isSel) {
-                    val r = maxOf(t.size.width, t.size.height) / 2f + 3.dp.toPx()
-                    drawCircle(if (isSel) hb.colors.text else hb.colors.accent, r, Offset(cx, ly + t.size.height / 2f))
-                    if (isSel) {
-                        val t2 = measurer.measure(lbl, labelStyle.copy(color = hb.colors.card))
-                        drawText(t2, topLeft = Offset(cx - t2.size.width / 2f, ly)); return@forEachIndexed
-                    }
-                }
-                drawText(t, topLeft = Offset(cx - t.size.width / 2f, ly))
+                // kit6.bars: label centre base + 12.5, today / selected in a fixed r 9 circle (10 sp label), clear of the axis line
+                val circled = isToday || isSel
+                val t = measurer.measure(lbl, labelStyle.copy(color = if (isSel) hb.colors.card else if (isToday) hb.colors.onAccent else hb.colors.muted,
+                    fontSize = if (circled) 10.sp else labelStyle.fontSize))
+                val lc = baseY + 12.5.dp.toPx()
+                if (circled) drawCircle(if (isSel) hb.colors.text else hb.colors.accent, 9.dp.toPx(), Offset(cx, lc))
+                drawText(t, topLeft = Offset(cx - t.size.width / 2f, lc - t.size.height / 2f))
             }
         }
         val h = hold
@@ -393,7 +389,7 @@ fun RangeBars(buckets: List<SeriesBucket>, grain: Grain, period: SectionPeriod, 
     val gl = ghost.orEmpty().filterNotNull()
     val lo = (buckets.mapNotNull { it.min ?: it.value } + gl.map { it.first }).minOrNull()
     val hi = (buckets.mapNotNull { it.max ?: it.value } + gl.map { it.second }).maxOrNull()
-    val labelStyle = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+    val labelStyle = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
     Canvas(modifier.fillMaxWidth().height(height)) {
         if (n == 0) return@Canvas
         val axisH = 22.dp.toPx()

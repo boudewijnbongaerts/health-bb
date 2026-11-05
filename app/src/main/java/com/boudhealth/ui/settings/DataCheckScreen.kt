@@ -189,8 +189,9 @@ private fun Overline(title: String, action: String? = null, onAction: (() -> Uni
 private data class RowExtras(
     val last: Map<String, LastValue> = emptyMap(),
     val workoutsPerApp: Map<String, Int> = emptyMap(),
-    val waistSources: List<String> = emptyList(),
     val waistNewest: Long? = null,
+    /** R6 #3: readable sources actually used per type (cache, last 30 days; see [usedSources]). */
+    val used: Map<String, List<String>> = emptyMap(),
 )
 
 private suspend fun loadExtras(context: android.content.Context): RowExtras = runCatching {
@@ -202,8 +203,8 @@ private suspend fun loadExtras(context: android.content.Context): RowExtras = ru
         RowExtras(
             last = last,
             workoutsPerApp = workoutCountsPerApp(env.cache, today.minusDays(29), today),
-            waistSources = waist.asReversed().mapNotNull { it.sourceLabel }.flatMap { it.split(", ") }.distinct(),
             waistNewest = waist.lastOrNull()?.time,
+            used = runCatching { usedSources(env.cache, today) }.getOrDefault(emptyMap()),
         )
     }
 }.getOrNull() ?: RowExtras()
@@ -236,13 +237,16 @@ private fun typeRows(d: Diagnostics, coverage: Map<String, Set<LocalDate>>, x: R
     ordered.groupBy { typeInfo(it.type).name }.forEach { (_, ts) ->
         val first = ts.first()
         val perm = ts.all { it.permissionGranted }
-        val sources = ts.flatMap { t -> t.sources.sortedByDescending { it.count30d ?: 0 }.mapNotNull { shortSource(it.label) } }.distinct()
+        // R6 #3: the row shows the sources actually used (cache); the raw Health Connect writers stay in the copied report
+        // and only decide "No data in Health Connect"
+        val writers = ts.flatMap { t -> t.sources.mapNotNull { shortSource(it.label) } }
+        val sources = ts.flatMap { t -> x.used[t.type].orEmpty() }.distinct()
         val stale = ts.firstNotNullOfOrNull { staleSentence(it) }
         val days = ts.mapNotNull { coverage[it.type] }.takeIf { it.isNotEmpty() }?.reduce { a, b -> a + b }
         val problem = when {
             !perm -> "Not allowed in Health Connect"
             stale != null -> stale
-            sources.isEmpty() && (days == null || days.isEmpty()) -> "No data in Health Connect"
+            writers.isEmpty() && sources.isEmpty() && (days == null || days.isEmpty()) -> "No data in Health Connect"
             else -> null
         }
         out += TypeRowModel(first.type, typeInfo(first.type), perm, sources, problem, ts.firstNotNullOfOrNull { x.last[it.type] }, days)
@@ -253,7 +257,7 @@ private fun typeRows(d: Diagnostics, coverage: Map<String, Set<LocalDate>>, x: R
 }
 
 private fun waistRow(coverage: Map<String, Set<LocalDate>>, x: RowExtras) = TypeRowModel(
-    "Waist", typeInfo("Waist"), true, x.waistSources.mapNotNull { shortSource(it) },
+    "Waist", typeInfo("Waist"), true, x.used["Waist"].orEmpty(),
     if (x.waistNewest == null) "No measurements yet" else null, x.last["Waist"], coverage["Waist"],
 )
 

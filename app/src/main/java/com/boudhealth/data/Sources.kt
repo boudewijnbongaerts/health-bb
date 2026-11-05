@@ -14,27 +14,21 @@ import java.time.Duration
  *   so we keep exactly one app per data type **per day** (the sync engine applies this day by day, so a day on which
  *   only a lower-priority app has data is still shown):
  *     body (weight, fat, lean, height)  → Withings first (the scale), then Google Health, then Renpho
- *     wearable (HR, HRV, sleep, VO2, workouts, …) → Google Health / Fitbit first (the tracker)
+ *     wearable (HR, HRV, sleep, VO2, workouts, …) → Google Health / Fitbit first (the tracker); for VO2 max the
+ *       values read directly from the Google Health API ([SourceOrder.GOOGLE_HEALTH_API]) come before all of them
  * - Workouts: overlapping sessions are merged; the preferred app's session wins, otherwise the longer one.
  */
 object Sources {
 
     enum class Kind { BODY, WEARABLE }
 
-    private const val WITHINGS = "com.withings.wiscale2"
     /** Google Health app (formerly Fitbit): the only source of Calories burned (v5 D1). */
     const val GOOGLE_HEALTH = "com.fitbit.FitbitMobile"
-    private val GOOGLE = listOf(
-        "com.fitbit.FitbitMobile",          // Google Health app (formerly Fitbit)
-        "com.google.android.apps.fitness",  // Google Fit
-        "com.google.android.apps.healthdata",
-    )
-    private const val SAMSUNG = "com.sec.android.app.shealth"
-    private const val RENPHO = "com.renpho.health"
 
+    /** Lists in [SourceOrder] (pure, unit-tested). WEARABLE starts with the Google Health API (VO₂ max read directly). */
     private val PRIORITY = mapOf(
-        Kind.BODY to listOf(WITHINGS) + GOOGLE + listOf(RENPHO, SAMSUNG),
-        Kind.WEARABLE to GOOGLE + listOf(WITHINGS, SAMSUNG, RENPHO),
+        Kind.BODY to SourceOrder.BODY,
+        Kind.WEARABLE to SourceOrder.WEARABLE,
     )
 
     /** Pseudo source for heart-rate days read as Health Connect 1-minute aggregates (all apps merged). */
@@ -59,7 +53,7 @@ object Sources {
     fun label(pkg: String): String = SourceNames.label(pkg)
 
     /** Lower = preferred. Unknown apps rank last (99). */
-    fun rank(kind: Kind, pkg: String): Int = PRIORITY.getValue(kind).indexOf(pkg).let { if (it < 0) 99 else it }
+    fun rank(kind: Kind, pkg: String): Int = SourceOrder.rank(PRIORITY.getValue(kind), pkg)
 
     /** Keeps the records of one app only: the highest-priority app that has data. */
     fun <T : Record> preferred(records: List<T>, kind: Kind): List<T> {

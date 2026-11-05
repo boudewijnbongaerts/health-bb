@@ -87,20 +87,6 @@ fun ValueText(
     Text(text, modifier, style = style, maxLines = 1)
 }
 
-/** "7h 20m" with numbers in [style] and letters in [unitStyle] (DESIGN §7). */
-@Composable
-fun DurationText(minutes: Int, modifier: Modifier = Modifier, style: TextStyle = LocalHB.current.type.number, unitStyle: TextStyle = LocalHB.current.type.unit) {
-    val hb = LocalHB.current
-    val text: AnnotatedString = buildAnnotatedString {
-        Fmt.durationParts(minutes).forEachIndexed { i, (n, u) ->
-            if (i > 0) append(" ")
-            withStyle(style.toSpanStyle().copy(color = hb.colors.text)) { append(n) }
-            withStyle(SpanStyle(fontSize = unitStyle.fontSize, fontWeight = unitStyle.fontWeight, color = hb.colors.muted)) { append(u) }
-        }
-    }
-    Text(text, modifier, style = style, maxLines = 1)
-}
-
 // =====================================================================================================================
 // Metric hero (DESIGN §5.4)
 // =====================================================================================================================
@@ -179,8 +165,9 @@ fun StatRow(stats: List<Stat>, modifier: Modifier = Modifier, color: Color = Loc
     ) {
         stats.forEachIndexed { i, s ->
             if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 4.dp).background(hb.colors.grid))
-            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                Text(s.label, style = hb.type.bodyXS.copy(fontSize = hb.type.labelS.fontSize), color = hb.colors.muted, maxLines = 1)
+            // R5 #32: 3+ columns get 10 dp padding (61–75 dp of content at 320–360 dp); labels end with an ellipsis
+            Column(Modifier.weight(1f).padding(horizontal = if (stats.size >= 3) 10.dp else 16.dp)) {
+                Text(s.label, style = hb.type.bodyXS.copy(fontSize = hb.type.labelS.fontSize), color = hb.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 ValueText(s.value, s.unit, style = hb.type.numberS, unitStyle = hb.type.unit)
             }
@@ -191,62 +178,3 @@ fun StatRow(stats: List<Stat>, modifier: Modifier = Modifier, color: Color = Loc
 // =====================================================================================================================
 // List row (DESIGN §5.8)
 // =====================================================================================================================
-
-/**
- * Min-h 68: glyph circle 44 · gap 14 · title 16/600 + subtitle 13 muted · right value 16/600 + sub 12 muted · chevron 18.
- * Divider 1 dp `grid` inset 58 from the row start; pass [divider] = false on the last row.
- * Pressed: `tile` background r 16 with 8 dp bleed.
- */
-@Composable
-fun ListRow(
-    title: String,
-    modifier: Modifier = Modifier,
-    glyph: Glyph? = null,
-    color: Color = LocalHB.current.colors.muted,
-    subtitle: String? = null,
-    subtitleColor: Color? = null,
-    value: String? = null,
-    valueSub: String? = null,
-    chevron: Boolean = true,
-    divider: Boolean = true,
-    leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    onClick: (() -> Unit)? = null,
-) {
-    val hb = LocalHB.current
-    Column(modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth()
-                .then(if (onClick != null) Modifier.hbClickable(shape = HbShapes.tileS, scaleOnPress = false, onClick = onClick) else Modifier)
-                .heightIn(min = 68.dp)
-                .padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            when {
-                leading != null -> leading()
-                glyph != null -> GlyphCircle(glyph, color)
-            }
-            if (leading != null || glyph != null) Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = hb.type.titleS, color = hb.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (subtitle != null) Text(subtitle, style = hb.type.bodyXS, color = subtitleColor ?: hb.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (value != null || valueSub != null) {
-                Spacer(Modifier.width(12.dp))
-                Column(horizontalAlignment = Alignment.End) {
-                    if (value != null) Text(value, style = hb.type.titleS, color = hb.colors.text, maxLines = 1, textAlign = TextAlign.End)
-                    if (valueSub != null) Text(valueSub, style = hb.type.bodyXS.copy(fontSize = hb.type.labelS.fontSize), color = hb.colors.muted, maxLines = 1)
-                }
-            }
-            trailing?.invoke()
-            if (chevron && onClick != null) {
-                Spacer(Modifier.width(8.dp))
-                GlyphIcon(Glyph.ChevR, size = 18.dp, color = hb.colors.muted)
-            }
-        }
-        if (divider) {
-            val inset: Dp = if (glyph != null || leading != null) 58.dp else 0.dp
-            Box(Modifier.padding(start = inset).fillMaxWidth().height(1.dp).background(hb.colors.grid))
-        }
-    }
-}

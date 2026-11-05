@@ -32,8 +32,8 @@ enum class Range(val label: String, val days: Long) {
 data class Window(val range: Range, val offset: Int, val start: LocalDate, val end: LocalDate) {
     val isCurrent: Boolean get() = offset == 0
     val label: String get() {
-        val f = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
-        val fy = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
+        val f = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+        val fy = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
         val last = end.minusDays(1)
         return when {
             range == Range.ALL -> "All time"
@@ -126,4 +126,52 @@ object Buckets {
         }
         return out
     }
+}
+
+/**
+ * R6 item 1 (owner, 5 Nov 2026): 1D on the page of a metric with one value per day / night / weigh-in shows that day's
+ * value (or, muted, the newest one before it) and a chart of the 7 days ending on the day, the same window the
+ * Activity / Body / Vitals tabs use on 1D. Pure, so the window logic is unit-tested.
+ */
+object DayView {
+    /** Pages whose 1D is "the day's value + 7 days" (intraday metrics hr, steps, calories, zone_min are not here). */
+    val ONE_VALUE_IDS: Set<String> = setOf(
+        "rhr", "hrv", "sleep", "breathing", "spo2", "vo2",
+        "weight", "body_fat", "fat_mass", "lean_mass", "lean_fat", "bmi", "waist", "whtr",
+        "exercise_min", "week_workouts", "streak",
+    )
+
+    /** Days in the 1D chart window (the day and the 6 before it). */
+    const val SPAN = 7
+
+    fun isOneValue(id: String): Boolean = id in ONE_VALUE_IDS
+
+    /** First day of the 7-day window ending on [day]. */
+    fun windowStart(day: LocalDate): LocalDate = day.minusDays((SPAN - 1).toLong())
+
+    /** The 7 days ending on [day], oldest first. */
+    fun days(day: LocalDate): List<LocalDate> = (SPAN - 1 downTo 0).map { day.minusDays(it.toLong()) }
+
+    /**
+     * Chart window of a 1D window [w]: the 7 days ending on its day (end exclusive), as a WEEK-range window with the
+     * same offset (so charts draw days, not hours). Other ranges are returned unchanged.
+     */
+    fun chartWindow(w: Window): Window =
+        if (w.range != Range.DAY) w else Window(Range.WEEK, w.offset, windowStart(w.start), w.start.plusDays(1))
+
+    /** The value shown on 1D: [pt] on [day] itself, or the newest one before it ([carried] = from an earlier day). */
+    data class Pick(val pt: Pt, val carried: Boolean)
+
+    /**
+     * The 1D value for [day] from the window's daily values [window] (any order; values after [day] are ignored).
+     * When the window has none, [older] is asked for the newest value before the window (null = none at all).
+     */
+    fun pick(window: List<Pt>, day: LocalDate, older: () -> Pt? = { null }): Pick? {
+        val p = window.filter { !it.date.isAfter(day) }.maxByOrNull { it.at } ?: older()?.takeIf { !it.date.isAfter(day) } ?: return null
+        return Pick(p, p.date != day)
+    }
+
+    /** The newest [n] reading days on or before [day] (oldest first): sparse metrics (waist) on 1D, as the Body tab card. */
+    fun lastReadings(dates: List<LocalDate>, day: LocalDate, n: Int = 8): List<LocalDate> =
+        dates.filter { !it.isAfter(day) }.distinct().sorted().takeLast(n)
 }

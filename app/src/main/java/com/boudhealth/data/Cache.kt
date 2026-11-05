@@ -34,6 +34,7 @@ class Cache private constructor(context: Context) : SQLiteOpenHelper(context, NA
     override fun onCreate(db: SQLiteDatabase) {
         SCHEMA.forEach { db.execSQL(it) }
         IMPORT_SCHEMA.forEach { db.execSQL(it) }
+        GH_SCHEMA.forEach { db.execSQL(it) }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -54,7 +55,7 @@ class Cache private constructor(context: Context) : SQLiteOpenHelper(context, NA
 
     /** Import tables exist in every version (created IF NOT EXISTS on first use; never dropped by an upgrade). */
     private val db: SQLiteDatabase get() = writableDatabase.also { d ->
-        if (!importReady) { IMPORT_SCHEMA.forEach { d.execSQL(it) }; importReady = true }
+        if (!importReady) { IMPORT_SCHEMA.forEach { d.execSQL(it) }; GH_SCHEMA.forEach { d.execSQL(it) }; importReady = true }
     }
 
     private inline fun <T> tx(block: SQLiteDatabase.() -> T): T {
@@ -98,6 +99,48 @@ class Cache private constructor(context: Context) : SQLiteOpenHelper(context, NA
 
     /** Columns: day, value, time, source, est (1 = calculated by Health BB). */
     private fun dayValue(c: Cursor) = DayValue(LocalDate.parse(c.getString(0)), c.getDouble(1), c.getLong(2), c.strOrNull(3), c.getInt(4) == 1)
+
+    // ------------------------------------------------------------------ Google Health API (VO₂ max)
+
+    /**
+     * Values read directly from the Google Health API live in their own table `gh_daily` (not in [TABLES]: a rebuild or
+     * a schema upgrade keeps them, like the Apple import) and are copied into `daily` under the source
+     * [GhApi.SOURCE]. That source ranks first for its metric, so on its days it is what the per-day choice keeps; the
+     * Health Connect sync merges the same rows into its own per-day pick (Sync.syncInstant), and [mirrorGh] puts them
+     * back after "Rebuild history". Upserts by day: a day the API no longer returns keeps its last value.
+     */
+    fun upsertGh(metric: String, rows: List<GhRow>): Int = tx {
+        val cv = ContentValues()
+        for (r in rows) {
+            if (r.value.isNaN() || r.value.isInfinite()) continue
+            cv.clear()
+            cv.put("metric", metric); cv.put("day", r.day.toString()); cv.put("value", r.value)
+            cv.put("time", r.time); cv.put("api_est", if (r.estimated) 1 else 0)
+            insertWithOnConflict("gh_daily", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+        mirrorGhLocked(this) // rows that changed `daily`
+    }
+
+    /** Google Health API rows of [metric] for [from]..[to], ascending. */
+    fun ghDaily(metric: String, from: LocalDate, to: LocalDate): List<GhRow> =
+        query("SELECT day, value, time, api_est FROM gh_daily WHERE metric = ? AND day BETWEEN ? AND ? ORDER BY day",
+            arrayOf(metric, from.toString(), to.toString())) { c -> GhRow(LocalDate.parse(c.getString(0)), c.getDouble(1), c.getLong(2), c.getInt(3) == 1) }
+
+    fun ghCount(): Int = query("SELECT COUNT(*) FROM gh_daily", emptyArray()) { it.getInt(0) }.first()
+
+    /** Copies every `gh_daily` row into `daily` where `daily` differs (after a rebuild / upgrade). Returns rows written. */
+    fun mirrorGh(): Int = tx { mirrorGhLocked(this) }
+
+    private fun mirrorGhLocked(d: SQLiteDatabase): Int {
+        val diff = "FROM gh_daily g WHERE NOT EXISTS (SELECT 1 FROM daily x WHERE x.metric = g.metric AND x.day = g.day " +
+            "AND x.source = '${GhApi.SOURCE}' AND x.value = g.value AND x.time = g.time)"
+        val days = d.rawQuery("SELECT MIN(day), COUNT(*) $diff", null).use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) LocalDate.parse(c.getString(0)) to c.getInt(1) else null
+        } ?: return 0
+        d.execSQL("INSERT OR REPLACE INTO daily (metric, day, value, time, source, est) SELECT g.metric, g.day, g.value, g.time, '${GhApi.SOURCE}', 0 $diff")
+        dirty.mark(days.first)
+        return days.second
+    }
 
     // ------------------------------------------------------------------ Apple import + Health Connect: per-day choice
 
@@ -605,6 +648,11 @@ class Cache private constructor(context: Context) : SQLiteOpenHelper(context, NA
             "CREATE TABLE meta (key TEXT PRIMARY KEY NOT NULL, value TEXT)",
             "CREATE TABLE sleep_stage (day TEXT NOT NULL, start INTEGER NOT NULL, end_ms INTEGER NOT NULL, stage TEXT NOT NULL, source TEXT)",
             "CREATE INDEX sleep_stage_day ON sleep_stage (day)",
+        )
+
+        /** Google Health API values (see [upsertGh]): kept through rebuilds and upgrades. api_est = Google's "estimated". */
+        private val GH_SCHEMA = listOf(
+            "CREATE TABLE IF NOT EXISTS gh_daily (metric TEXT NOT NULL, day TEXT NOT NULL, value REAL NOT NULL, time INTEGER NOT NULL, api_est INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (metric, day)) WITHOUT ROWID",
         )
 
         @Volatile private var instance: Cache? = null

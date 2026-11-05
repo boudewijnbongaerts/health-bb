@@ -137,6 +137,25 @@ class Store(context: Context) {
         ds.edit { it[kHeight] = json.encodeToString(samples, list) }
     }
 
+    // ------------------------------------------------------------------ Google Health API account (no tokens, ever)
+
+    private val kGh = stringPreferencesKey("google_health")
+
+    /** Connected flag, account e-mail, last fetch time, history / reconnect flags. Tokens are never stored. */
+    val googleHealth: Flow<GhAccount> = data.map { p ->
+        p[kGh]?.let { runCatching { json.decodeFromString(GhAccount.serializer(), it) }.getOrNull() } ?: GhAccount()
+    }
+
+    suspend fun googleHealthNow(): GhAccount = googleHealth.first()
+
+    /** Atomic read-modify-write of the Google Health account state. */
+    suspend fun updateGoogleHealth(transform: (GhAccount) -> GhAccount) {
+        ds.edit { p ->
+            val cur = p[kGh]?.let { runCatching { json.decodeFromString(GhAccount.serializer(), it) }.getOrNull() } ?: GhAccount()
+            p[kGh] = json.encodeToString(GhAccount.serializer(), transform(cur))
+        }
+    }
+
     // ------------------------------------------------------------------ UI preferences (see Prefs.kt)
 
     private val kUi = stringPreferencesKey("ui_prefs")

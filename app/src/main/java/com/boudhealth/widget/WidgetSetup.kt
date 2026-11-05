@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import com.boudhealth.App
@@ -144,9 +145,9 @@ class WidgetSetupActivity : ComponentActivity() {
         val clock = start.family == WidgetFamily.CLOCK
         Column(Modifier.fillMaxSize().background(hb.colors.bgDim).windowInsetsPadding(WindowInsets.safeDrawing)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable { finish() }, contentAlignment = Alignment.Center) {
-                    GlyphIcon(Glyph.Back, size = 24.dp, color = hb.colors.text)
-                }
+                // R5 #36: the back button has a TalkBack label
+                com.boudhealth.ui.components.IconCircleButton(Glyph.Back, { finish() }, contentDescription = "Back", size = 48.dp, glyphSize = 24.dp,
+                    background = Color.Transparent)
                 Spacer(Modifier.width(8.dp))
                 Text(if (clock) "Health BB · Clock" else "Health BB", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.text)
             }
@@ -367,7 +368,7 @@ private fun TilesSetup(state: MutableState<WidgetConfigV2>) {
     fun setTiles(t: List<TileSpec>) { if (t.isNotEmpty()) state.value = state.value.copy(tiles = t) }
 
     SectionLabel("Tiles") {
-        Text(if (adding) "Done" else "+ Add tile", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.accent,
+        Text(if (adding) "Done" else "Add tile", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.accent,
             modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { adding = !adding }.padding(horizontal = 6.dp, vertical = 4.dp))
     }
     Group {
@@ -406,7 +407,7 @@ private fun TilesSetup(state: MutableState<WidgetConfigV2>) {
                     GlyphIcon(glyph, size = 18.dp, color = hb.colors.text)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(name, fontSize = 16.sp, color = hb.colors.text, maxLines = 1, modifier = Modifier.weight(1f))
+                Text(name, fontSize = 16.sp, color = hb.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))   // R5 #32
                 SizeChips(id, spec.size) { sz -> setTiles(state.value.tiles.map { if (it.tileId == id) it.copy(size = sz, sizeWide = null) else it }) }
             }
         }
@@ -441,9 +442,9 @@ private fun TilesSetup(state: MutableState<WidgetConfigV2>) {
 
     SectionLabel("Transparency")
     Group {
-        SliderRow(Glyph.Widget, "Widget background", "${cfg.bgOpacity} %", cfg.bgOpacity, 0..100, 5, "Clear", "Solid") { state.value = state.value.copy(bgOpacity = it) }
+        SliderRow(Glyph.Widget, "Widget background", "${cfg.bgOpacity}${com.boudhealth.ui.section.R3Texts.PCT_SP}%", cfg.bgOpacity, 0..100, 5, "Clear", "Solid") { state.value = state.value.copy(bgOpacity = it) }
         Divider()
-        SliderRow(Glyph.Grid, "Tiles", "${cfg.tileOpacity} %", cfg.tileOpacity, 0..100, 5, "Clear", "Solid") { state.value = state.value.copy(tileOpacity = it) }
+        SliderRow(Glyph.Grid, "Tiles", "${cfg.tileOpacity}${com.boudhealth.ui.section.R3Texts.PCT_SP}%", cfg.tileOpacity, 0..100, 5, "Clear", "Solid") { state.value = state.value.copy(tileOpacity = it) }
     }
 }
 
@@ -457,7 +458,7 @@ private fun SizeChips(id: String, current: TileSize, onPick: (TileSize) -> Unit)
             val ok = sz in allowed
             val sel = sz == current
             Box(
-                Modifier.size(36.dp, 30.dp).clip(RoundedCornerShape(15.dp)).background(if (sel) hb.colors.accent else Color.Transparent)
+                Modifier.size(32.dp, 30.dp).clip(RoundedCornerShape(15.dp)).background(if (sel) hb.colors.accent else Color.Transparent)
                     .then(if (ok) Modifier.clickable { onPick(sz) } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
@@ -492,7 +493,7 @@ private fun ClockSetup(state: MutableState<WidgetConfigV2>) {
 
     SectionLabel("Size")
     Group {
-        SliderRow(Glyph.History, "Clock size", "${cfg.clockSize} %", cfg.clockSize, 50..100, 5, "Small", "Large") { state.value = state.value.copy(clockSize = it) }
+        SliderRow(Glyph.History, "Clock size", "${cfg.clockSize}${com.boudhealth.ui.section.R3Texts.PCT_SP}%", cfg.clockSize, 50..100, 5, "Small", "Large") { state.value = state.value.copy(clockSize = it) }
         Divider()
         SliderRow(Glyph.Rings, "Rings and clock", "${cfg.ringShare} : ${100 - cfg.ringShare}", cfg.ringShare, 30..70, 2, "More clock", "More rings") {
             state.value = state.value.copy(ringShare = it)
@@ -508,7 +509,7 @@ private fun ClockSetup(state: MutableState<WidgetConfigV2>) {
 
     SectionLabel("Transparency")
     Group {
-        SliderRow(Glyph.Widget, "Widget background", "${cfg.bgOpacity} %", cfg.bgOpacity, 0..100, 5, "Clear", "Solid") { state.value = state.value.copy(bgOpacity = it) }
+        SliderRow(Glyph.Widget, "Widget background", "${cfg.bgOpacity}${com.boudhealth.ui.section.R3Texts.PCT_SP}%", cfg.bgOpacity, 0..100, 5, "Clear", "Solid") { state.value = state.value.copy(bgOpacity = it) }
     }
 }
 

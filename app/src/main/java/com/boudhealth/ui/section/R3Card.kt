@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -136,7 +137,9 @@ fun R3CardFrame(
             Text(title, style = CardTitle, color = hb.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             if (info != null) {
                 Spacer(Modifier.width(2.dp))
-                Box(Modifier.plainClickable { showInfo = true }.padding(4.dp).semantics { contentDescription = "About ${info.title}" }) {
+                // 23 visual / 48 touch: requiredSize overflows the 23 slot evenly, so the header layout and glyph stay put
+                Box(Modifier.size(23.dp).requiredSize(48.dp).plainClickable { showInfo = true }.semantics { contentDescription = "About ${info.title}" },
+                    contentAlignment = Alignment.Center) {
                     GlyphIcon(Glyph.Info, size = 15.dp, color = hb.colors.muted)
                 }
             }
@@ -179,6 +182,12 @@ fun ValueBlock(
     val cover = size == ValueSize.COVER
     val b0 = size.valueY - R3_HEADER_H          // value text line inside the block
     val a11y = listOfNotNull(value, rest, unit, context, pill?.let { pillA11y(it) }).joinToString(" ")
+    val split = remember(pill) {
+        pill?.let { pm ->
+            pm.text.split(" · ").takeIf { it.size == 2 && " above " in it[0] && " below " in it[1] }
+                ?.let { listOf(DeltaPillModel(TrendDir.UP, it[0], pm.tone), DeltaPillModel(TrendDir.DOWN, it[1], pm.tone)) }
+        }
+    }
     Layout(
         modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = a11y },
         content = {
@@ -186,7 +195,7 @@ fun ValueBlock(
                 withStyle(SpanStyle(fontSize = fs.sp, fontWeight = FontWeight.Bold, color = if (muted) hb.colors.muted else hb.colors.text)) { append(value) }
                 if (rest != null) withStyle(SpanStyle(fontSize = (fs * 0.62f).sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)) { append(" $rest") }
                 if (unit != null) withStyle(SpanStyle(fontSize = (fs * 0.5f).sp, fontWeight = FontWeight.W400, color = hb.colors.muted)) { append(" $unit") }
-            }, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"))
+            }, maxLines = 1, style = R3Base)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (context != null) Text(context, fontSize = (if (cover) 12f else 12.5f).sp, color = hb.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false))
@@ -194,23 +203,32 @@ fun ValueBlock(
             }
             Box(Modifier.alpha(pillAlpha)) { if (pill != null) DeltaPill(pill) }
             Box { if (trailingKey != null) GhostKey(trailingKey) }
+            // two-part "n days above … · n days below …": one pill per row when it doesn't fit (as the Vitals hero)
+            Box(Modifier.alpha(pillAlpha)) { split?.let { DeltaPill(it[0]) } }
+            Box(Modifier.alpha(pillAlpha)) { split?.let { DeltaPill(it[1]) } }
         },
     ) { ms, c ->
         val w = c.maxWidth
         val loose = c.copy(minWidth = 0, minHeight = 0)
         val pv = ms[0].measure(loose); val pc = ms[1].measure(loose)
         val pk = ms[3].measure(loose)
-        val pp = ms[2].measure(loose.copy(maxWidth = (w - pk.width - 8.dp.roundToPx()).coerceAtLeast(0)))
+        // the pill gets its natural width first; the ghost key only when both fit (the Trends basis already names the period)
+        val pillW = if (pill != null) ms[2].maxIntrinsicWidth(24.dp.roundToPx()) else 0
+        val twoRows = split != null && pillW > w
+        val withKey = trailingKey != null && !twoRows && (pill == null || pillW + 8.dp.roundToPx() + pk.width <= w)
+        val pp = ms[2].measure(loose.copy(maxWidth = if (withKey) (w - pk.width - 8.dp.roundToPx()).coerceAtLeast(0) else w))
+        val ps = if (twoRows) listOf(ms[4].measure(loose), ms[5].measure(loose)) else emptyList()
         val base = b0.roundToPx()
         fun bl(p: androidx.compose.ui.layout.Placeable) = p[FirstBaseline].takeIf { it != androidx.compose.ui.layout.AlignmentLine.Unspecified } ?: (p.height * 0.78f).roundToInt()
         val hasPill = pill != null
-        val h = (b0 + if (hasPill) 62.dp else 42.dp).roundToPx()
+        val h = (b0 + (if (hasPill) 62.dp else 42.dp) + if (twoRows) 30.dp else 0.dp).roundToPx()
         val rowC = if (hasPill) base + 44.dp.roundToPx() else h - 18.dp.roundToPx()
         layout(w, h) {
             pv.place(0, base - bl(pv))
             if (context != null || contextExtra != null) pc.place(0, base + 22.dp.roundToPx() - (if (context != null) bl(pc) else pc.height / 2))
-            if (hasPill) pp.place(0, rowC - pp.height / 2)
-            if (trailingKey != null) pk.place(w - pk.width, rowC - pk.height / 2)
+            if (twoRows) ps.forEachIndexed { k, p -> p.place(0, rowC + (30 * k).dp.roundToPx() - p.height / 2) }
+            else if (hasPill) pp.place(0, rowC - pp.height / 2)
+            if (withKey) pk.place(w - pk.width, rowC - pk.height / 2)
         }
     }
 }
@@ -237,7 +255,7 @@ fun DeltaPill(m: DeltaPillModel, onTile: Boolean = false) {
             Spacer(Modifier.width(4.5.dp))
         }
         Text(m.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = TextStyle(fontFeatureSettings = "tnum"))
+            style = R3Base)
     }
 }
 
@@ -272,7 +290,7 @@ fun RailCells(cells: List<StatCell>, modifier: Modifier) {
                         withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(c.value) }
                         if (c.unit != null) withStyle(SpanStyle(fontSize = 12.sp, color = hb.colors.muted)) { append(" ${c.unit}") }
                         if (c.note != null) withStyle(SpanStyle(fontSize = 11.5.sp, color = hb.colors.muted)) { append("  ${c.note}") }
-                    }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFeatureSettings = "tnum"))
+                    }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = R3Base)
                 }
             }
         }
@@ -293,7 +311,7 @@ fun CoverStatRow(cells: List<StatCell>) {
                 Text(buildAnnotatedString {
                     withStyle(SpanStyle(fontSize = (if (big) 20 else 17).sp, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(c.value) }
                     if (c.unit != null) withStyle(SpanStyle(fontSize = 12.sp, color = hb.colors.muted)) { append(" ${c.unit}") }
-                }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFeatureSettings = "tnum"))
+                }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = R3Base)
             }
         }
     }

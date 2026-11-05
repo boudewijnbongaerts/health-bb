@@ -125,7 +125,7 @@ private class CalGeo(val m: CalendarModel, cover: Boolean, w: Float, h: Float) {
     val lcy = yy + 6f
     val rtop = lcy + 18f
     val pitch = min(if (cover) 50f else 60f, (h - 16f - rtop) / 6f)
-    val ringD = min(if (cover) 26f else 36f, pitch - if (cover) 24f else 26f)
+    val ringD = minOf(if (cover) 26f else 36f, pitch - if (cover) 24f else 26f, cw - 8f)
     fun rowTop(r: Int) = rtop + r * pitch + (pitch - (19f + ringD)) / 2f + 2f
     fun cellX(i: Int) = labW + cw * (i + 0.5f)
     fun day(r: Int, i: Int): LocalDate? {
@@ -174,10 +174,10 @@ fun RingCalendar(m: CalendarModel, cover: Boolean, onDay: (LocalDate) -> Unit, m
 
 private fun DrawScope.drawCalendar(m: CalendarModel, cover: Boolean, g: CalGeo, measurer: TextMeasurer, col: RingColors, hb: HB, wkByMon: Map<LocalDate, WeekColumnCell>) {
         val dp = density
-        val letter = TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.faint)
+        val letter = R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = hb.faint)
         m.monthLabel?.let { lab ->
-            val t = measurer.measure(lab, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted))
-            val base = if (cover) 22f else (20f + 12f)
+            val t = measurer.measure(lab, R3Base.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted))
+            val base = if (cover) 25f else (20f + 12f)
             drawText(t, topLeft = Offset((if (cover) 6f else 4f) * dp, base * dp - t.firstBaseline))
         }
         for (i in 0..6) ctext(measurer, "MTWTFSS"[i].toString(), g.cellX(i) * dp, g.lcy * dp, letter)
@@ -194,21 +194,31 @@ private fun DrawScope.drawCalendar(m: CalendarModel, cover: Boolean, g: CalGeo, 
             val top = g.rowTop(r)
             val rcy = top + 19f + g.ringD / 2f
             val band = m.bandWeek == mon
-            if (band) drawRoundRect(hb.colors.tileHi, Offset(-10f * dp, (top - 7f) * dp), Size((size.width / dp + 20f) * dp, (19f + g.ringD + 12f) * dp), CornerRadius(14f * dp))
+            if (band) {
+                // clear of the week above, optically even around the digits / rings; inner 12 / 12 side insets, cover 6 from the card edge
+                val gap = g.pitch - 19f - g.ringD                 // inner 7, cover 5
+                val bt = top - (gap - 1.5f)
+                val bb = top + 19f + g.ringD + gap + 1f
+                val bx = if (cover) -6f else -10f
+                drawRoundRect(hb.colors.tileHi, Offset(bx * dp, bt * dp), Size((size.width / dp - 2f * bx + 2f * (if (cover) 0f else 1f)) * dp, (bb - bt) * dp), CornerRadius(14f * dp))
+            }
             if (m.mondayLabels) ctext(measurer, R3Texts.dMon(mon), 2f * dp, rcy * dp,
-                TextStyle(fontSize = (if (cover) 10f else 10.5f).sp, fontWeight = FontWeight.SemiBold, color = if (band) hb.colors.text else hb.colors.muted), -1)
+                R3Base.copy(fontSize = (if (cover) 10f else 10.5f).sp, fontWeight = FontWeight.SemiBold, color = if (band) hb.colors.text else hb.colors.muted), -1)
             for (i in 0..6) {
                 val d = g.day(r, i) ?: continue
                 val cx = g.cellX(i)
                 val fut = d.isAfter(m.today)
                 val sel = m.selected == d
-                if (sel && !band) drawRoundRect(hb.colors.tileHi, Offset((cx - g.cw / 2f + 3f) * dp, (top - 5f) * dp), Size((g.cw - 6f) * dp, (19f + g.ringD + 10f) * dp), CornerRadius(12f * dp))
+                if (sel && !band) {
+                    val p = min(5f, (g.pitch - 19f - g.ringD) / 2f + 0.5f)   // cover 3, inner 4.5: clear of the neighbouring rows
+                    drawRoundRect(hb.colors.tileHi, Offset((cx - g.cw / 2f + 3f) * dp, (top - p) * dp), Size((g.cw - 6f) * dp, (19f + g.ringD + 2f * p) * dp), CornerRadius(12f * dp))
+                }
                 val ny = (top + 7f) * dp
                 val fs = 11.5f
                 when {
-                    d == m.today -> { drawCircle(hb.colors.accent, 9.5f * dp, Offset(cx * dp, ny)); ctext(measurer, "${d.dayOfMonth}", cx * dp, ny, TextStyle(fontSize = (fs - 0.5f).sp, fontWeight = FontWeight.Bold, color = hb.colors.onAccent)) }
-                    sel -> { drawCircle(hb.colors.text, 9.5f * dp, Offset(cx * dp, ny)); ctext(measurer, "${d.dayOfMonth}", cx * dp, ny, TextStyle(fontSize = (fs - 0.5f).sp, fontWeight = FontWeight.Bold, color = hb.colors.card)) }
-                    else -> ctext(measurer, "${d.dayOfMonth}", cx * dp, ny, TextStyle(fontSize = fs.sp, fontWeight = FontWeight.Bold, color = if (fut) hb.faint else hb.colors.muted))
+                    d == m.today -> { drawCircle(hb.colors.accent, 9.5f * dp, Offset(cx * dp, ny)); ctext(measurer, "${d.dayOfMonth}", cx * dp, ny, R3Base.copy(fontSize = (fs - 0.5f).sp, fontWeight = FontWeight.Bold, color = hb.colors.onAccent)) }
+                    sel -> { drawCircle(hb.colors.text, 9.5f * dp, Offset(cx * dp, ny)); ctext(measurer, "${d.dayOfMonth}", cx * dp, ny, R3Base.copy(fontSize = (fs - 0.5f).sp, fontWeight = FontWeight.Bold, color = hb.colors.card)) }
+                    else -> ctext(measurer, "${d.dayOfMonth}", cx * dp, ny, R3Base.copy(fontSize = fs.sp, fontWeight = FontWeight.Bold, color = if (fut) hb.faint else hb.colors.muted))
                 }
                 miniRings(cx * dp, rcy * dp, g.ringD, m.rings[d], col, alpha = if (fut) 0.5f else 1f)
             }
@@ -220,7 +230,7 @@ private fun DrawScope.drawCalendar(m: CalendarModel, cover: Boolean, g: CalGeo, 
                 drawRoundRect(hb.colors.tileHi, Offset(bx * dp, (rcy - 3f) * dp), Size(bw * dp, 6f * dp), CornerRadius(3f * dp))
                 val q = if (wk.target > 0) min(1f, wk.points.toFloat() / wk.target) else 0f
                 if (q > 0f) drawRoundRect(hpCol, Offset(bx * dp, (rcy - 3f) * dp), Size(maxOf(6f, bw * q) * dp, 6f * dp), CornerRadius(3f * dp))
-                ctext(measurer, R3Texts.int(wk.points.toDouble()), (x + g.wkW) * dp, rcy * dp, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum"), 1)
+                ctext(measurer, R3Texts.int(wk.points.toDouble()), (x + g.wkW) * dp, rcy * dp, R3Base.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum"), 1)
             } else {
                 val x = g.labW + g.calW + if (m.mondayLabels) 6f else 8f
                 statusIcon((x + 8f) * dp, rcy * dp, 16f * dp, wk.icon, wk.tone, hb)
@@ -265,7 +275,7 @@ fun MonthRingGrid(year: Int, rings: Map<YearMonth, FloatArray>, today: LocalDate
             val ym = YearMonth.of(year, m + 1)
             val lab = if (cover) "JFMAMJJASOND"[m].toString() else R3Texts.monShort(ym.atDay(1))
             val ly = rcy + d / 2f + 15f
-            val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
+            val style = R3Base.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = hb.colors.muted)
             if (ym.atDay(1).isAfter(today)) {
                 miniRings(ccx * dp, rcy * dp, d, null, col, if (cover) 4f else 8f, if (cover) 1.5f else 2f, alpha = 0.35f)
                 ctext(measurer, lab, ccx * dp, ly * dp, style.copy(color = hb.faint)); continue
@@ -315,10 +325,10 @@ fun YearRingRow(years: List<YearRingCell>, today: LocalDate, cover: Boolean, onY
             val ly = cy + d / 2f + 22f
             if (!cover) {
                 listOf("${R3Texts.int(y.hours)} h", R3Texts.short(y.steps), R3Texts.short(y.points)).forEachIndexed { k, t ->
-                    ctext(measurer, t, c * dp, (ly + 26f + k * 18f) * dp, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = cols[k], fontFeatureSettings = "tnum"))
+                    ctext(measurer, t, c * dp, (ly + 26f + k * 18f) * dp, R3Base.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = cols[k], fontFeatureSettings = "tnum"))
                 }
             }
-            val style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)
+            val style = R3Base.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)
             if (y.year == today.year) {
                 val tw = measurer.measure("${y.year}", style).size.width / dp
                 drawRoundRect(hb.colors.accent, Offset((c - tw / 2f - 9f) * dp, (ly - 10f) * dp), Size((tw + 18f) * dp, 20f * dp), CornerRadius(10f * dp))

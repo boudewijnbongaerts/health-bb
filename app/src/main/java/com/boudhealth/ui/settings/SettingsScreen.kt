@@ -121,21 +121,21 @@ internal const val INFO_HEART_POINTS =
         "Maximum heart rate is 190 by default, the value at which heart points best match Google Health's Active Zone Minutes. " +
         "The WHO advises at least 150 minutes of moderate activity a week, about 150 heart points. Default target: 150 a week."
 
-/** V2_TEXTS §5 Workout days (i), with the G0 heart points condition (pending owner approval, see V2_TEXTS §6a). */
-internal const val INFO_WORKOUT_DAYS =
-    "A workout day is a day with at least one recorded workout of 20 minutes or more that earned at least 10 heart points. " +
-        "Walks count only when your watch or app saved them as a workout. You can change the rule in Settings → Profile & goals."
+/** V2_TEXTS §5 Workout days (i). R5 #38: built from the saved rule, so it never shows other numbers than the rule. */
+internal fun infoWorkoutDays(g: Goals): String {
+    fun pts(n: Int) = if (n == 1) "1 heart point" else "$n heart points"
+    val rule = if (g.activeDayMode == "points") "A workout day is a day with at least ${pts(g.activeDayMinPoints.coerceAtLeast(1))}. "
+    else "A workout day is a day with at least one recorded workout of ${g.activeDayMinWorkoutMin.coerceAtLeast(1)} minutes or more" +
+        (if (g.activeDayMinWorkoutPoints > 0) " that earned at least ${pts(g.activeDayMinWorkoutPoints)}. " else ". ") +
+        "Walks count only when your watch or app saved them as a workout. "
+    return rule + "You can change the rule in Settings → Profile & goals."
+}
 
 /** V2_TEXTS §5 Import Apple Health (i). */
 internal const val INFO_IMPORT =
     "A one-time import of the history in an Apple Health export. On the iPhone: Health app → your profile → Export All Health Data. " +
         "Send export.zip to this phone and pick it here. Health Connect stays the live source; for each day and type only one source is shown."
 
-/** V2_TEXTS §6 Data & sync header. */
-internal const val DATA_HEADER_TITLE = "How your data is gathered"
-internal const val DATA_HEADER_TEXT =
-    "Health Connect is Android's hub for health data. Apps such as Google Health and Withings save your steps, workouts, sleep and " +
-        "measurements there. Health BB reads from Health Connect and never writes to it. Your data stays on this phone."
 
 /** V2_TEXTS §6a: the professional line under the heart points target. */
 internal const val WHO_LINE = "WHO minimum: ${Goals.WHO_WEEKLY_HEART_POINTS} a week"
@@ -179,7 +179,7 @@ fun SettingsScreen(nav: Nav) {
         "custom" -> CustomColoursSheet(close)
         "rebuild" -> RebuildSheet(close)
         "info:heart" -> InfoSheet("Heart points", INFO_HEART_POINTS, close)
-        "info:days" -> InfoSheet("Workout days", INFO_WORKOUT_DAYS, close)
+        "info:days" -> InfoSheet("Workout days", infoWorkoutDays(LocalPrefs.current.goals), close)
         "info:import" -> ImportInfoSheet(close)
     }
 }
@@ -261,7 +261,7 @@ private fun ProfileGroup(onSheet: (String) -> Unit) {
         if (s != null) row {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
-                    .background(hb.colors.surface, RoundedCornerShape(16.dp)).padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    .background(hb.colors.tile, RoundedCornerShape(16.dp)).padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 GlyphIcon(Glyph.Target, size = 18.dp, color = hb.colors.muted)
@@ -272,9 +272,12 @@ private fun ProfileGroup(onSheet: (String) -> Unit) {
                 HBButton("Use", { edit.updateGoals { it.copy(zoneMinWeek = s) } }, kind = ButtonKind.Tonal, small = true, enabled = s != g.zoneMinWeek)
             }
         }
+        // R6 #2: resetting is an action, so a tonal "Reset" button (same texts as the heart points sheet's "Default … Reset" line)
         row {
-            ChevronRow("Reset", { edit.updateGoals { it.copy(zoneMinWeek = Goals.DEFAULT_WEEKLY_HEART_POINTS) } },
-                value = Fmt.int(Goals.DEFAULT_WEEKLY_HEART_POINTS), leadingGlyph = Glyph.Undo)
+            SettingsRow("Default", subtitle = Fmt.int(Goals.DEFAULT_WEEKLY_HEART_POINTS), leadingGlyph = Glyph.Undo) {
+                HBButton("Reset", { edit.updateGoals { it.copy(zoneMinWeek = Goals.DEFAULT_WEEKLY_HEART_POINTS) } }, kind = ButtonKind.Tonal, small = true,
+                    enabled = g.zoneMinWeek != Goals.DEFAULT_WEEKLY_HEART_POINTS)
+            }
         }
     }
     Spacer(Modifier.height(12.dp))
@@ -290,7 +293,7 @@ private fun ProfileGroup(onSheet: (String) -> Unit) {
     SettingsGroup(null) {
         row { ChevronRow("Target weight", { onSheet("target:weight") }, value = g.targetWeightKg?.let { "${num1(it)} kg" } ?: "Not set", leadingGlyph = Glyph.Scale) }
         row { ChevronRow("Target waist circumference", { onSheet("target:waist") }, value = g.targetWaistCm?.let { "${num1(it)} cm" } ?: "Not set", leadingGlyph = Glyph.Tape) }
-        row { ChevronRow("Target body fat percentage", { onSheet("target:body_fat") }, value = g.targetFatPct?.let { "${num1(it)} %" } ?: "Not set", leadingGlyph = Glyph.Percent) }
+        row { ChevronRow("Target body fat percentage", { onSheet("target:body_fat") }, value = g.targetFatPct?.let { "${num1(it)}${com.boudhealth.ui.section.R3Texts.PCT_SP}%" } ?: "Not set", leadingGlyph = Glyph.Percent) }
     }
 }
 
@@ -334,7 +337,7 @@ private fun GoalStepperRow(
             if (caption != null) Text(caption, style = hb.type.bodyXS.copy(fontSize = 12.5.sp), color = hb.colors.muted, maxLines = 1)
         }
         Spacer(Modifier.width(8.dp))
-        Stepper(v, { v = it }, step = step, range = range, onValueClick = onValueClick ?: { typing = true })
+        Stepper(v, { v = it }, step = step, range = range, onValueClick = onValueClick ?: { typing = true }, background = hb.colors.tile)
     }
     if (typing) NumberSheet(title, v, onDismiss = { typing = false }, onSave = { v = it; typing = false }, step = step, range = range)
 }
@@ -441,7 +444,9 @@ private fun WorkoutDayRuleSheet(onDismiss: () -> Unit) {
         RuleOption("Heart points", selected = points, onSelect = { points = true }) {
             RuleStepper("at least", minPts, { minPts = it }, 1.0..300.0, 1.0, "pts")
         }
-        Text(INFO_WORKOUT_DAYS.substringBefore(" You can change"), style = hb.type.bodyXS, color = hb.colors.muted, modifier = Modifier.padding(top = 12.dp))
+        val shown = g.copy(activeDayMode = if (points) "points" else "workout", activeDayMinWorkoutMin = minMin.toInt(),
+            activeDayMinWorkoutPoints = minWorkoutPts.toInt(), activeDayMinPoints = minPts.toInt())
+        Text(infoWorkoutDays(shown).substringBefore(" You can change"), style = hb.type.bodyXS, color = hb.colors.muted, modifier = Modifier.padding(top = 12.dp))
         Spacer(Modifier.height(20.dp))
         SheetActions {
             HBButton("Save", {
@@ -555,7 +560,7 @@ private fun AppearanceGroup(onCustom: () -> Unit) {
     val isCustom = selectedId.startsWith(Palettes.Custom.PREFIX)
     SettingsGroup("Appearance") {
         row {
-            SegmentRow("Theme", ThemeMode.entries.toList(), prefs.themeMode, { edit.setThemeMode(it) }, subtitle = null,
+            SegmentRow("Theme", ThemeMode.entries.toList(), prefs.themeMode, { edit.setThemeMode(it) }, subtitle = null, leadingGlyph = Glyph.Moon,
                 label = { when (it) { ThemeMode.SYSTEM -> "System"; ThemeMode.LIGHT -> "Light"; ThemeMode.DARK -> "Dark" } })
         }
         row {
@@ -700,40 +705,27 @@ private fun DataGroup(nav: Nav, onSheet: (String) -> Unit) {
     val failed = !status.lastSyncOk || !status.hcAvailable
     val running = syncState.running || status.refreshing
 
+    // R5 #48 (coordinator): the "How your data is gathered" header card is removed; its group label moves to the rows
     SettingsGroup("Data & sync") {
-        row {
-            Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    GlyphIcon(Glyph.Shield, size = 22.dp, color = hb.colors.accent)
-                    Spacer(Modifier.width(14.dp))
-                    Text(DATA_HEADER_TITLE, style = hb.type.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = hb.colors.text)
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(DATA_HEADER_TEXT, style = hb.type.bodyXS.copy(fontSize = 12.5.sp), color = hb.colors.muted)
-            }
-        }
-    }
-    Spacer(Modifier.height(12.dp))
-    SettingsGroup(null) {
+        // R6 #2: "Last synced" + "Sync now" in one row; the action is a trailing tonal button (chevron = opens something)
         row {
             val t = lastSync?.let { Fmt.timestamp(it).let { s -> if (Fmt.date(it) == LocalDate.now()) "Today $s" else s } } ?: "Never"
-            SettingsRow("Last synced", leadingGlyph = if (failed) Glyph.Alert else Glyph.Check) {
-                Text(if (running) syncState.phase.ifBlank { "Syncing…" } else t, style = hb.type.bodyS,
-                    color = if (failed) hb.colors.bad else hb.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            SettingsRow("Last synced", subtitle = if (running) syncState.phase.ifBlank { "Syncing…" } else t,
+                subtitleColor = if (failed) hb.colors.bad else null, leadingGlyph = if (failed) Glyph.Alert else Glyph.Check) {
+                HBButton("Sync now", { if (!running) status.refresh() }, kind = ButtonKind.Tonal, small = true, glyph = Glyph.Sync, busy = running)
             }
         }
         row {
             val on = granted?.contains(HcReader.BACKGROUND) == true
-            SwitchRow("Background sync", on, { HcIntents.openAppPermissions(ctx) }, subtitle = null, enabled = bgFeature)
+            SwitchRow("Background sync", on, { HcIntents.openAppPermissions(ctx) }, subtitle = null, enabled = bgFeature, leadingGlyph = Glyph.Sync)
         }
-        row { ChevronRow("Sync now", { if (!running) status.refresh() }, leadingGlyph = Glyph.Sync) }
         row { ChevronRow("Data check", { nav.push(Route.DataCheck) }, leadingGlyph = Glyph.Pulse) }
         row { ChevronRow("Rebuild history", { onSheet("rebuild") }, leadingGlyph = Glyph.History) }
         row {
             val pick = rememberAppleImportLauncher()
             // status only while an import runs or failed; no hint text otherwise
             val sub = when {
-                importState.running -> "Importing… ${importState.fraction?.let { "${(it * 100).toInt()} %" } ?: ""}".trim()
+                importState.running -> "Importing… ${importState.fraction?.let { "${(it * 100).toInt()}${com.boudhealth.ui.section.R3Texts.PCT_SP}%" } ?: ""}".trim()
                 importState.error != null -> "Import failed"
                 else -> null
             }
@@ -745,6 +737,8 @@ private fun DataGroup(nav: Nav, onSheet: (String) -> Unit) {
                 }
             }
         }
+        // VO2 max read directly from the Google Health API (GoogleHealthRow.kt)
+        row { GoogleHealthRow() }
     }
 }
 

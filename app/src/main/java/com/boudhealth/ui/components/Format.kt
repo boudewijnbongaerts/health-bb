@@ -13,10 +13,11 @@ import kotlin.math.roundToLong
 
 /** Number / time formatting rules (DESIGN §7). Pure functions, usable from widgets too. */
 object Fmt {
-    private val locale: Locale get() = Locale.getDefault()
+    // R5 #42: English only, whatever the phone's language ("4 Sep", "1,234"), the same as R3Texts
+    private val locale: Locale get() = Locale.ENGLISH
     private val zone: ZoneId get() = ZoneId.systemDefault()
 
-    /** Locale thousands separator, [decimals] fixed decimals. */
+    /** English thousands separator, [decimals] fixed decimals. */
     fun num(v: Double, decimals: Int = 0): String =
         if (decimals <= 0) NumberFormat.getIntegerInstance(locale).format(v.roundToLong())
         else NumberFormat.getNumberInstance(locale).apply { minimumFractionDigits = decimals; maximumFractionDigits = decimals }.format(v)
@@ -49,16 +50,15 @@ object Fmt {
         }
     }
 
-    /** Minutes → "7h 20m" / "45m". Use [durationParts] to style numbers and letters differently. */
+    /** Minutes → "7h 20m" / "7h 05m" / "45m" (R5 #41: minutes padded after hours, as R3 "7h 05m"). Use [durationParts] to style numbers and letters differently. */
     fun duration(minutes: Int): String = durationParts(minutes).joinToString(" ") { it.first + it.second }
 
-    /** Minutes → [("7","h"), ("20","m")]: numbers in number style, letters in unit style. */
+    /** Minutes → [("7","h"), ("05","m")]: numbers in number style, letters in unit style. */
     fun durationParts(minutes: Int): List<Pair<String, String>> {
         val h = minutes / 60; val m = minutes % 60
         return when {
             h == 0 -> listOf(m.toString() to "m")
-            m == 0 -> listOf(h.toString() to "h")
-            else -> listOf(h.toString() to "h", m.toString() to "m")
+            else -> listOf(h.toString() to "h", m.toString().padStart(2, '0') to "m")
         }
     }
 

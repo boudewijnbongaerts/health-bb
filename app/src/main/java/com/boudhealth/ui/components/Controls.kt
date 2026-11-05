@@ -154,7 +154,7 @@ object Periods {
 
     /** (label, sub) e.g. ("This week", "26 Oct – 1 Nov"), ("Today", "Fri 30 Oct"), ("October", "2026"). */
     fun label(w: Window, today: LocalDate = LocalDate.now(zone)): Pair<String, String?> {
-        val loc = Locale.getDefault()
+        val loc = Locale.ENGLISH
         val last = w.end.minusDays(1)
         return when (w.range) {
             Range.DAY -> Fmt.dayLabel(w.start, today) to (if (w.offset <= 1) DateTimeFormatter.ofPattern("EEE d MMM", loc).format(w.start) else null)
@@ -310,10 +310,6 @@ fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: M
 /** Spacer helper: vertical gap. */
 @Composable
 fun VGap(h: Dp) = Spacer(Modifier.height(h))
-
-/** Spacer helper: horizontal gap. */
-@Composable
-fun HGap(w: Dp) = Spacer(Modifier.width(w))
 
 /** Horizontal arrangement helper exposed for consistency. */
 val Gap8 = Arrangement.spacedBy(8.dp)

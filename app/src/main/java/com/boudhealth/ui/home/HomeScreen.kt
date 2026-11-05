@@ -72,6 +72,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.ui.text.style.TextOverflow
 import kotlin.math.roundToInt
 
 
@@ -166,17 +167,10 @@ fun HomeScreen(nav: Nav) {
                         )
                     }
                 }
-                if (false && !prefs.ui.homeHintSeen && specs.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                        GlyphIcon(Glyph.Grid, size = 18.dp, color = hb.colors.muted)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Long-press any tile to move, resize or add tiles", style = hb.type.bodyS, color = hb.colors.muted, textAlign = TextAlign.Center)
-                    }
-                }
                 val bf = sync.backfill
                 if (bf != null && !bf.done) {
                     Text(
-                        if (bf.paused != null) "Reading history paused · continues later" else "Reading history · ${(bf.fraction * 100).roundToInt()} %",
+                        if (bf.paused != null) "Reading history paused · continues later" else "Reading history · ${com.boudhealth.ui.section.R3Texts.pct(bf.fraction * 100.0)}",
                         style = hb.type.bodyXS, color = hb.colors.muted, textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                     )
@@ -191,11 +185,13 @@ fun HomeScreen(nav: Nav) {
 private fun HomeHeader(onEdit: () -> Unit, onAllMetrics: () -> Unit, onSettings: () -> Unit) {
     val hb = LocalHB.current
     val today = LocalDate.now()
-    val date = remember(today) { DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()).format(today) }
+    val date = remember(today) { DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH).format(today) }
+    // R5 #32: below 360 dp the greeting steps down to 22 sp and ends with an ellipsis instead of losing its third line
+    val narrow = LocalScreen.current.widthDp < 360f
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(date, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted, maxLines = 1)
-            Text(LocalPrefs.current.goals.name?.takeIf { it.isNotBlank() }?.let { "${greeting()}, $it" } ?: greeting(), fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, lineHeight = 32.sp, color = hb.colors.text, maxLines = 2)
+            Text(LocalPrefs.current.goals.name?.takeIf { it.isNotBlank() }?.let { "${greeting()}, $it" } ?: greeting(), fontSize = if (narrow) 22.sp else 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, lineHeight = if (narrow) 27.sp else 32.sp, color = hb.colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(12.dp))
         IconCircleButton(Glyph.Grid, onEdit, contentDescription = "Arrange home", background = hb.colors.card)
@@ -254,6 +250,8 @@ internal fun TodayPill(r: RingsData?, wide: Boolean, onClick: () -> Unit) {
     // Steps slot showed the heart % and the Heart points slot showed the steps ("7.2K"). Steps are a plain number.
     val p = r?.let { RingData.progress(it.day) } ?: FloatArray(RingData.ORDER.size)
     val labels = r?.let { RingData.labels(it.day) } ?: List(RingData.ORDER.size) { null }
+    // R5 #32: below 360 dp a slot is ≈ 75 dp, so values use the short form (16k, rule 5)
+    val compact = !wide && LocalScreen.current.widthDp < 360f
     Row(
         Modifier
             .fillMaxWidth()
@@ -275,7 +273,7 @@ internal fun TodayPill(r: RingsData?, wide: Boolean, onClick: () -> Unit) {
                 Spacer(Modifier.width(if (wide) 10.dp else 8.dp))
                 Column(verticalArrangement = Arrangement.Center) {
                     if (wide) Text(RingData.NAMES[id] ?: "", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, maxLines = 1, lineHeight = 15.sp)   // 01.13: one label colour; only the ring is coloured
-                    Text(pillValue(id, labels[slot]), fontSize = if (wide) 17.sp else 15.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1, softWrap = false, lineHeight = 19.sp)
+                    Text(pillValue(id, labels[slot], compact), fontSize = if (wide) 17.sp else 15.5.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1, softWrap = false, lineHeight = 19.sp)
                 }
             }
         }
@@ -286,8 +284,9 @@ internal fun TodayPill(r: RingsData?, wide: Boolean, onClick: () -> Unit) {
 }
 
 /** "34 min" · "7,240" · "12 pts" for one ring id; "–" without a value. Never a percentage (V2-111). */
-internal fun pillValue(id: String, l: RingLabel?): String {
+internal fun pillValue(id: String, l: RingLabel?, compact: Boolean = false): String {
     l ?: return "–"
     val unit = RingData.UNITS[id].orEmpty()
-    return if (unit.isEmpty()) l.value else "${l.value} $unit"
+    val v = if (compact) l.compactValue else l.value
+    return if (unit.isEmpty()) v else "$v $unit"
 }

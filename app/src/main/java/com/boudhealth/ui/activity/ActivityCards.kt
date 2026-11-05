@@ -94,7 +94,7 @@ object ActivityTexts {
     const val HEART_ZONES = "Heart zones"
     const val IN_BED = "In bed"
     const val TOTAL_TIME = "Total time"
-    const val AVG_HR = "Avg heart rate"
+    const val AVG_HR = "Avg HR"
     const val ALL_VALUES = "All values"
     const val CALORIES_STAT = "Calories burned"
 
@@ -114,6 +114,7 @@ object ActivityTexts {
             "Maximum heart rate is 190 by default, the value at which heart points best match Google Health's Active Zone Minutes. " +
             "The WHO advises at least 150 minutes of moderate activity a week, about 150 heart points. Default target: 150 a week.",
     )
+    /** Fallback only: the cards and the detail build the body from the saved rule (settings.infoWorkoutDays). */
     val INFO_WORKOUT_DAYS = InfoText(
         "Workout days",
         "A workout day is a day with at least one recorded workout of 20 minutes or more that earned at least 10 heart points. " +
@@ -395,7 +396,7 @@ private fun SleepHeadline(p: SectionPeriod, d: CardData) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             Headline(n?.let { SFmt.hm(it.info.asleepMin) } ?: "—")
             Spacer(Modifier.weight(1f))
-            if (n != null) Text("${com.boudhealth.ui.components.Fmt.hm(n.info.start)} – ${com.boudhealth.ui.components.Fmt.hm(n.info.end)}",
+            if (n != null) Text("${com.boudhealth.ui.components.Fmt.hm(n.info.start)}–${com.boudhealth.ui.components.Fmt.hm(n.info.end)}",
                 style = hb.type.bodyS, color = hb.colors.muted)
         }
         return

@@ -108,9 +108,20 @@ class Ink(val c: Canvas, val t: RenderTheme) {
             cx += text("h", cx, y, u, t.muted, 500)
             cx += (fs * 0.18f).roundToInt()
         }
-        cx += text(m.toString(), cx, y, fs, t.text, 700, spacing = valueSpacing(fs)) + 1f
+        // "7h 05m": minutes padded after hours (as R3 SFmt.hm)
+        val ms = if (h > 0) m.toString().padStart(2, '0') else m.toString()
+        cx += text(ms, cx, y, fs, t.text, 700, spacing = valueSpacing(fs)) + 1f
         cx += text("m", cx, y, u, t.muted, 500)
         return cx - x
+    }
+
+    /** Width of [duration] at [fs] without drawing it. */
+    fun durationWidth(minutes: Int, fs: Float): Float {
+        val u = (fs * 0.55f).roundToInt().toFloat()
+        val h = minutes / 60; val m = minutes % 60
+        var w = 0f
+        if (h > 0) w += measure(h.toString(), fs, 700, valueSpacing(fs)) + 1f + measure("h", u, 500) + (fs * 0.18f).roundToInt()
+        return w + measure(if (h > 0) m.toString().padStart(2, '0') else m.toString(), fs, 700, valueSpacing(fs)) + 1f + measure("m", u, 500)
     }
 
     /** Label row: dot r4 + label (600), optional meta right-aligned at [right] (11.5 muted). [top] = row top (18 dp line). */
@@ -118,10 +129,11 @@ class Ink(val c: Canvas, val t: RenderTheme) {
         val base = top + 9f + fs * 0.36f
         var lx = x
         if (dotColor != null) { circle(x + 4f, top + 9f, 4f, dotColor); lx = x + 14f }
-        val lw = text(label, lx, base, fs, labelColor, 600)
+        val lw = text(fit(label, right - lx + 6f, fs, 600), lx, base, fs, labelColor, 600)   // never past the tile edge (6 dp of the padding allowed)
         if (meta != null) {
             val avail = right - (lx + lw + 10f)
-            if (avail > 20f) text(fit(meta, avail, 11.5f), right, top + 9f + 4f, 11.5f, t.muted, 400, Paint.Align.RIGHT)
+            // the whole meta or none (never "La…")
+            if (measure(meta, 11.5f) <= avail) text(meta, right, top + 9f + 4f, 11.5f, t.muted, 400, Paint.Align.RIGHT)
         }
     }
 
@@ -201,7 +213,7 @@ class Ink(val c: Canvas, val t: RenderTheme) {
     fun pill(label: String, tone: Tone, dir: Dir, x: Float, top: Float, h: Float = 22f, maxW: Float = Float.MAX_VALUE): Float {
         val (bg, fg) = toneColors(tone)
         val gw = if (dir == Dir.NONE) 0f else 15f
-        val padL = if (dir == Dir.NONE) 9f else 6f
+        val padL = if (dir == Dir.NONE) 9f else 8f   // ▲ / ▼ ink inset ≈ the 9 dp right inset
         val s = fit(label, maxW - padL - 9f - gw, 11.5f, 600)
         val w = padL + gw + measure(s, 11.5f, 600) + 9f
         rrect(x, top, x + w, top + h, h / 2f, bg)

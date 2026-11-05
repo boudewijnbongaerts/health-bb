@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -218,7 +217,8 @@ private fun BottomBar(nav: Nav, modifier: Modifier, navInset: androidx.compose.u
                 val glyphColor by animateColorAsState(if (selected) hb.colors.onAccentCont else hb.colors.muted, tween(180), label = "tabGlyph")
                 Column(
                     Modifier.weight(1f)
-                        .semantics { role = Role.Tab; this.selected = selected; contentDescription = tab.label }
+                        // R5 #36: the visible label names the tab (no contentDescription, so TalkBack reads it once)
+                        .semantics(mergeDescendants = true) { role = Role.Tab; this.selected = selected }
                         .plainClickable {
                             if (nav.currentTab == tab.route && nav.stack.size == 1) return@plainClickable
                             haptics.segment()

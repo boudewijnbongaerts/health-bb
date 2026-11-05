@@ -601,6 +601,8 @@ object SourceNames {
 
     private val NAMES = mapOf(
         "com.fitbit.FitbitMobile" to "Google Health",
+        // VO2 max read directly from the Google Health API; R6 #3: told apart from the Google Health app via Health Connect
+        "com.google.health.api" to "Google Health (direct)",
         "com.google.android.apps.fitness" to "Google Fit",
         "com.google.android.apps.healthdata" to PHONE,
         "com.android.healthconnect.controller" to PHONE,

@@ -52,7 +52,8 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 object AppleImport {
     const val WORK = "healthboud-apple-import"
-    private const val CHANNEL = "import"
+    /** The app's one notification channel (also used by the Google Health "Reconnect" notification). */
+    internal const val CHANNEL = "import"
     const val NOTIFICATION_ID = 4711
 
     data class Progress(
@@ -291,9 +292,14 @@ object AppleImport {
 
     // ------------------------------------------------------------------ notification
 
+    /** Creates [CHANNEL] if needed (idempotent). */
+    internal fun ensureChannel(nm: NotificationManager?) {
+        nm?.createNotificationChannel(NotificationChannel(CHANNEL, "Apple Health import", NotificationManager.IMPORTANCE_LOW))
+    }
+
     internal fun foregroundInfo(context: Context, p: Progress, cancel: android.app.PendingIntent?): ForegroundInfo {
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm?.createNotificationChannel(NotificationChannel(CHANNEL, "Apple Health import", NotificationManager.IMPORTANCE_LOW))
+        ensureChannel(nm)
         val pct = ((p.fraction ?: 0f) * 100).toInt()
         val b = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)

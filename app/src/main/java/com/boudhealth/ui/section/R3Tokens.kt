@@ -1,6 +1,7 @@
 package com.boudhealth.ui.section
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 
 /**
@@ -30,6 +31,13 @@ object R3Colors {
     /** Fat mass (Body hero legend, composition bars, Trends spark): kit K["fat_mass"]. */
     val fatMass = Color(0xFFD78731)
 }
+
+/**
+ * Base text style of every R3 Text / Canvas label: the app font (Inter) with tabular figures. A getter, because
+ * [com.boudhealth.ui.theme.AppFont.family] is set once by AppTheme; `style = TextStyle(...)` and rememberTextMeasurer()
+ * otherwise fall back to the system font.
+ */
+val R3Base: TextStyle get() = TextStyle(fontFamily = com.boudhealth.ui.theme.AppFont.family, fontFeatureSettings = "tnum")
 
 /** Card span in the R3 grid: S = 1 column, M = 2 columns (inner); cover: always one column. */
 enum class CardSize { S, M }

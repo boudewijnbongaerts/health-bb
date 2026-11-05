@@ -4,8 +4,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
-import com.boudhealth.ui.components.GlyphIcon
-import com.boudhealth.ui.components.plainClickable
+import com.boudhealth.ui.components.IconCircleButton
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -81,7 +80,8 @@ import com.boudhealth.ui.theme.LocalHB
 import java.time.LocalDate
 import kotlin.math.abs
 
-private val WAIST_RANGES = listOf(Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
+// R6 item 1: the same six periods as every metric page (default 1Y unchanged)
+private val WAIST_RANGES = listOf(Range.DAY, Range.WEEK, Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
 
 /**
  * Waist page (UI_PLAN #8): the metric template specialised for waist. Entries come straight from the Store
@@ -118,7 +118,15 @@ fun WaistScreen(nav: Nav) {
     val target = prefs.goals.targetWaistCm
 
     val all = entries.map { Pt(Fmt.dateTime(it.time), it.value) }
-    val inWin = all.filter { !it.date.isBefore(w.start) && it.date.isBefore(w.end) }
+    // R6 item 1: 1D = the day's reading (or, muted, the last one before it) + the 7 days ending on the day, widened to the
+    // last 8 tape readings up to the day like the Body tab's waist card on 1D (readings are weeks apart)
+    val dayMode = range == Range.DAY
+    val dayPick = if (dayMode) com.boudhealth.data.DayView.pick(all, w.start) else null
+    val inWin = if (dayMode) {
+        val ks = com.boudhealth.data.DayView.lastReadings(all.map { it.date }, w.start).toSet()
+        val from = com.boudhealth.data.DayView.windowStart(w.start)
+        all.filter { (it.date in ks || !it.date.isBefore(from)) && it.date.isBefore(w.end) }
+    } else all.filter { !it.date.isBefore(w.start) && it.date.isBefore(w.end) }
     val last = entries.lastOrNull()
     val prev = entries.getOrNull(entries.size - 2)
 
@@ -155,19 +163,27 @@ fun WaistScreen(nav: Nav) {
 
                 // ---- hero (follows the chart selection)
                 val scrub: TPoint? = chartState.point()
-                val value = if (w.offset == 0) last?.value else inWin.lastOrNull()?.v
+                // R5 #30: a selected week / month dot is a mean: keep the latest value, show the bucket's range (as MetricDetail)
+                val scrubLv = chartState.selection?.let { chartState.levels.getOrNull(it.level) }
+                val bucketSel = scrub != null && scrubLv?.bucketed == true
+                val value = if (dayMode) dayPick?.pt?.v else if (w.offset == 0) last?.value else inWin.lastOrNull()?.v
                 val whtr = value?.let { it / heightCm }
                 // v5 S3: values + coloured bands, no text
                 // the WHtR with its (i) sits under the hero (below)
                 val context: String? = if (value == null) "No data for this period" else null
-                val deltas = if (w.offset == 0 && last != null && prev != null) {
+                val deltas = if (!dayMode && w.offset == 0 && last != null && prev != null) {
                     val ch = last.value - prev.value
                     listOf(Delta(if (Math.round(abs(ch) * 10) == 0L) "Same as ${Fmt.shortDate(Fmt.date(prev.time))}" else "${Fmt.num(abs(ch), 1)} cm vs ${Fmt.shortDate(Fmt.date(prev.time))}",
                         deltaKind(ch, false, 0.2), deltaDir(ch, 0.05)))
                 } else emptyList()
-                MetricHero(
-                    "Waist circumference", Cat.waist, scrub?.v ?: value, "cm", decimals = 1,
-                    context = scrub?.let { p -> Fmt.dayLabel(p.at.toLocalDate(), today) + " · WHtR ${Fmt.num(p.v / heightCm, 2)}" } ?: context,
+                if (dayMode) OneDayHero("Waist circumference", Cat.waist, value, "cm", 1, dayPick?.pt?.date, dayPick?.carried ?: false, today, range to offset)
+                else MetricHero(
+                    "Waist circumference", Cat.waist, if (bucketSel) value else scrub?.v ?: value, "cm", decimals = 1,
+                    context = scrub?.let { p ->
+                        if (bucketSel) (if (scrubLv?.grain == ChartGrain.WEEK) "Week of " else "") + Fmt.range(p.at.toLocalDate(), p.end.toLocalDate().minusDays(1)) +
+                            (if (p.n > 1) " · ${Fmt.num(p.lo, 1)}–${Fmt.num(p.hi, 1)} cm" else " · ${Fmt.num(p.hi, 1)} cm")
+                        else Fmt.dayLabel(p.at.toLocalDate(), today) + " · WHtR ${Fmt.num(p.v / heightCm, 2)}"
+                    } ?: context,
                     deltas = deltas, scrubbing = scrub != null, animateKey = range to offset,
                 )
                 if (scrub != null && deltas.isNotEmpty()) Spacer(Modifier.height(38.dp))
@@ -175,7 +191,8 @@ fun WaistScreen(nav: Nav) {
                 if (whtr != null && scrub == null) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(HealthTexts.WHTR + " ", style = hb.type.bodyS, color = hb.colors.muted)
                     Text(Fmt.num(whtr, 2), style = hb.type.bodyS, color = hb.colors.text)
-                    Box(Modifier.plainClickable { whtrInfo = true }.padding(6.dp)) { GlyphIcon(Glyph.Info, size = 16.dp, color = hb.colors.muted) }
+                    IconCircleButton(Glyph.Info, { whtrInfo = true }, contentDescription = "About ${HealthTexts.WHTR}", size = 28.dp, glyphSize = 16.dp,
+                        background = Color.Transparent, tint = hb.colors.muted)
                 }
                 Spacer(Modifier.height(12.dp))
 
@@ -200,7 +217,7 @@ fun WaistScreen(nav: Nav) {
                         com.boudhealth.ui.components.ZoneLabel(heightCm * 0.6, hi, "High", hb.colors.bad),
                     )
                     val raw = inWin.mapIndexed { k, pt -> TPoint(pt.at, pt.at, pt.v, ref = k) }
-                    val dom = if (range == Range.ALL) inWin.first().date else w.start
+                    val dom = if (range == Range.ALL || dayMode) inWin.first().date else w.start
                     val levels = remember(inWin, range, offset) {
                         listOf(
                             TLevel(ChartGrain.DAY, raw, bucketed = false),
@@ -219,13 +236,16 @@ fun WaistScreen(nav: Nav) {
                             ChartCallout(
                                 Fmt.dayLabel(p.at.toLocalDate(), today) + " · " + java.time.format.DateTimeFormatter.ofPattern("HH:mm").format(p.at), Fmt.num(p.v, 1), "cm",
                                 lines = listOf(CalloutLine("WHtR", Fmt.num(p.v / heightCm, 2))),
-                                delta = prevPt?.let { q -> val ch = p.v - q.v; "${if (ch >= 0) "+" else "−"}${Fmt.num(abs(ch), 1)} cm vs ${Fmt.shortDate(q.date)}" },
+                                delta = prevPt?.let { q -> val ch = p.v - q.v
+                                    if (Math.round(abs(ch) * 10) == 0L) "Same as ${Fmt.shortDate(q.date)}" else "${if (ch > 0) "+" else "−"}${Fmt.num(abs(ch), 1)} cm vs ${Fmt.shortDate(q.date)}" },
                             )
                         }
                     }
                     TimeChart(
                         state = chartState, levels = levels,
-                        start = if (range == Range.ALL) inWin.first().at.minusDays(3) else w.start.atStartOfDay(),
+                        start = if (range == Range.ALL) inWin.first().at.minusDays(3)
+                            else if (dayMode) minOf(inWin.first().at.minusDays(3), com.boudhealth.data.DayView.windowStart(w.start).atStartOfDay())
+                            else w.start.atStartOfDay(),
                         end = if (range == Range.ALL) inWin.last().at.plusDays(3) else w.end.atStartOfDay(),
                         color = Cat.waist, callout = callout,
                         description = "Waist circumference, ${inWin.size} measurements, latest ${Fmt.num(inWin.last().v, 1)} cm",
@@ -235,9 +255,10 @@ fun WaistScreen(nav: Nav) {
                     )
                 }
                 Spacer(Modifier.height(20.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // R5 #32: wraps at narrow widths (both buttons ≈ 333 dp)
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HBButton("Measure with tape", { nav.push(Route.Tape) }, glyph = Glyph.Tape)
-                    Spacer(Modifier.width(8.dp))
                     HBButton("Add manually", { addWaist = true }, kind = ButtonKind.Text)
                 }
             },

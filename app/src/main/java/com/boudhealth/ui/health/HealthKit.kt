@@ -137,33 +137,31 @@ fun fmtValue(id: String, v: Double, decimals: Int): String = when (id) {
 // Ranges (B_SPEC §1 table), periods
 // =====================================================================================================================
 
-// v3 D12: every page offers the same ladder (1D only where there is intraday data) and always ends with "All",
-// which starts at the earliest stored day. The registry's own ranges still filter the list.
-private val R_LONG = listOf(Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
-private val R_TREND = listOf(Range.WEEK, Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
-private val R_NIGHTLY = listOf(Range.WEEK, Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
-private val R_INTRADAY = listOf(Range.DAY, Range.WEEK, Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
+// v3 D12: every page offers the same ladder and always ends with "All", which starts at the earliest stored day.
+// R6 item 1 (owner): every metric page has the same six periods 1D 1W 1M 3M 1Y All. 1D on a one-value-per-day page
+// (DayView.ONE_VALUE_IDS) = that day's value + the 7 days ending on it; intraday pages keep their hourly 1D.
+private val R_SIX = listOf(Range.DAY, Range.WEEK, Range.MONTH, Range.QUARTER, Range.YEAR, Range.ALL)
 
-/** (ranges, default) for a metric's detail page: B_SPEC's table, limited to what the registry offers. */
+/** (ranges, default) for a metric's detail page: B_SPEC's table, limited to what the registry offers. Defaults unchanged. */
 fun detailRanges(m: Metric): Pair<List<Range>, Range> {
     val (want, def) = when (m.id) {
-        // owner (3 Nov): every Activity metric page has 1D; VO₂ 1D = the latest value with its date
-        "vo2" -> (listOf(Range.DAY) + R_LONG) to Range.YEAR
-        "rhr", "hrv", "sleep", "breathing", "spo2" -> R_NIGHTLY to Range.MONTH
-        "weight", "body_fat", "fat_mass", "lean_mass", "lean_fat", "bmi" -> R_TREND to Range.YEAR
-        "waist", "whtr" -> R_TREND to Range.YEAR
-        "hr", "steps", "calories", "zone_min" -> R_INTRADAY to Range.DAY
-        "exercise_min" -> R_NIGHTLY to Range.MONTH
+        "vo2" -> R_SIX to Range.YEAR
+        "rhr", "hrv", "sleep", "breathing", "spo2" -> R_SIX to Range.MONTH
+        "weight", "body_fat", "fat_mass", "lean_mass", "lean_fat", "bmi" -> R_SIX to Range.YEAR
+        "waist", "whtr" -> R_SIX to Range.YEAR
+        "hr", "steps", "calories", "zone_min" -> R_SIX to Range.DAY
+        "exercise_min" -> R_SIX to Range.MONTH
         else -> m.ranges to m.defaultRange
     }
-    val allowed = want.filter { it in m.ranges || (m.id == "vo2" && it == Range.DAY) }.ifEmpty { m.ranges }
+    // the six periods of the one-value pages do not depend on the registry's (older, shorter) range lists
+    val allowed = want.filter { it in m.ranges || com.boudhealth.data.DayView.isOneValue(m.id) }.ifEmpty { m.ranges }
     return allowed to (if (def in allowed) def else allowed.first())
 }
 
 /** Periods for the metric pages: calendar day / week / month / 3 months / calendar year (D8); detail pages keep 3M. */
 object HealthPeriods {
     private val zone: ZoneId get() = ZoneId.systemDefault()
-    private val loc: Locale get() = Locale.getDefault()
+    private val loc: Locale get() = Locale.ENGLISH
 
     fun window(range: Range, offset: Int, today: LocalDate = LocalDate.now(zone)): Window = when (range) {
         // D8: 1Y = the calendar year everywhere (sections and detail pages)
@@ -231,38 +229,6 @@ object HealthPeriods {
             p.start to p.end.minusDays(1)
         }
     }
-
-    /** "vs last week" etc. for delta pills of averages / totals. */
-    fun prevPhrase(range: Range): String = when (range) {
-        Range.DAY -> "vs your 7-day avg"
-        Range.WEEK -> "vs last week"
-        Range.MONTH -> "vs last month"
-        Range.QUARTER -> "vs the 3 months before"
-        Range.YEAR -> "vs the year before"
-        Range.ALL -> ""
-    }
-
-    /** "vs a year ago" etc. for measurement deltas (current value vs the first reading of the window). */
-    fun agoPhrase(w: Window, first: LocalDate): String = when {
-        w.offset > 0 -> "over this period"
-        w.range == Range.MONTH -> "vs a month ago"
-        w.range == Range.QUARTER -> "vs 3 months ago"
-        w.range == Range.YEAR -> "this year"
-        w.range == Range.WEEK -> "vs a week ago"
-        else -> "since ${DateTimeFormatter.ofPattern("MMM yyyy", loc).format(first)}"
-    }
-}
-
-/** Break lines on gaps longer than 1.5 buckets for nightly values (B_SPEC: a missing night breaks the line). */
-fun gapFor(m: Metric, w: Window): Long? {
-    if (m.kind == MetricKind.MEASUREMENT) return null
-    val days = when (w.range) {
-        Range.DAY -> return 2 * 3_600_000L
-        Range.WEEK, Range.MONTH, Range.QUARTER -> 1
-        Range.YEAR -> 7
-        Range.ALL -> 31
-    }
-    return (days * 1.5 * 86_400_000L).toLong()
 }
 
 // =====================================================================================================================
@@ -343,54 +309,6 @@ fun trend7(points: List<Pt>): List<Pt> = points.mapIndexed { i, p ->
     Pt(p.at, s / n)
 }
 
-/** Least-squares slope per day of (day, value); null with < 3 points or < 14 days span. */
-fun slopePerDay(points: List<Pt>): Double? {
-    if (points.size < 3) return null
-    val x0 = points.first().date
-    val xs = points.map { ChronoUnit.DAYS.between(x0, it.date).toDouble() }
-    if (xs.last() - xs.first() < 14) return null
-    val ys = points.map { it.v }
-    val mx = xs.average(); val my = ys.average()
-    var num = 0.0; var den = 0.0
-    for (i in xs.indices) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) * (xs[i] - mx) }
-    return if (den == 0.0) null else num / den
-}
-
-/** Recomposition verdict (B_SPEC §2): fat −1 kg or more AND lean ≥ −2 % of start → recomp; fat down but lean down > 2 % → losing both. */
-enum class Recomp { RECOMP, LOSING_BOTH, NONE }
-
-fun recompOf(leanStart: Double?, leanEnd: Double?, fatStart: Double?, fatEnd: Double?): Recomp {
-    if (leanStart == null || leanEnd == null || fatStart == null || fatEnd == null) return Recomp.NONE
-    val fatDown = fatEnd - fatStart <= -1.0
-    val leanHeld = (leanEnd - leanStart) >= -0.02 * leanStart
-    return when {
-        fatDown && leanHeld -> Recomp.RECOMP
-        fatDown -> Recomp.LOSING_BOTH
-        else -> Recomp.NONE
-    }
-}
-
-fun recompSentence(leanDelta: Double?, fatDelta: Double?): String {
-    if (leanDelta == null || fatDelta == null) return "Needs weigh-ins with body fat at the start and end of the period."
-    val fat = when {
-        fatDelta <= -0.3 -> "Fat down ${Fmt.num(abs(fatDelta), 1)} kg"
-        fatDelta >= 0.3 -> "Fat up ${Fmt.num(fatDelta, 1)} kg"
-        else -> "Fat about the same"
-    }
-    val lean = when {
-        abs(leanDelta) < 0.5 -> "lean mass held"
-        leanDelta > 0 -> "lean mass up ${Fmt.num(leanDelta, 1)} kg"
-        else -> "lean mass down ${Fmt.num(abs(leanDelta), 1)} kg"
-    }
-    val tail = when {
-        fatDelta <= -0.3 && leanDelta > -0.5 -> " Most of your weight loss is fat."
-        fatDelta <= -0.3 -> " Part of the loss is lean mass: keep protein and strength work up."
-        fatDelta >= 0.3 && leanDelta >= 0.5 -> " You're gaining both."
-        else -> ""
-    }
-    return "$fat while $lean.$tail"
-}
-
 /** Height from Health Connect only (manual height comes from prefs, so a fresh edit shows before the cache mirror). Read-only. */
 suspend fun hcHeightM(context: Context): Double? = withContext(Dispatchers.IO) {
     runCatching { Cache.get(context.applicationContext).latest(M.HEIGHT)?.value?.takeIf { it in 0.5..2.6 } }.getOrNull()
@@ -400,4 +318,4 @@ suspend fun hcHeightM(context: Context): Double? = withContext(Dispatchers.IO) {
 fun effectiveHeightCm(hcM: Double?, manualCm: Double?): Double? = hcM?.let { it * 100.0 } ?: manualCm
 
 /** Percent string for a goal fraction. */
-fun pct(v: Double, goal: Double): String = if (goal <= 0) "–" else "${Fmt.num(v / goal * 100.0)}%"
+fun pct(v: Double, goal: Double): String = if (goal <= 0) "–" else "${Fmt.num(v / goal * 100.0)}${com.boudhealth.ui.section.R3Texts.PCT_SP}%"

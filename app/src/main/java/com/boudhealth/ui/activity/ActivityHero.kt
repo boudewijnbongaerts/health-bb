@@ -32,6 +32,7 @@ import com.boudhealth.data.SectionPeriod
 import com.boudhealth.data.SectionScope
 import com.boudhealth.ui.components.Glyph
 import com.boudhealth.ui.components.GlyphCircle
+import com.boudhealth.ui.section.R3Base
 import com.boudhealth.ui.section.CalendarModel
 import com.boudhealth.ui.section.MonthRingGrid
 import com.boudhealth.ui.section.R3StatusIcon
@@ -124,7 +125,7 @@ private fun LifetimeRows(m: ActR3, cover: Boolean) {
                 GlyphCircle(g, hb.palette.ring(i).first, size = gd, glyphSize = if (cover) 17.dp else 22.dp)
                 Spacer(Modifier.width(14.dp))
                 Text(v, Modifier.alignByBaseline(), fontSize = (if (cover) 19 else 28).sp, fontWeight = FontWeight.Bold, color = hb.colors.text, maxLines = 1,
-                    style = TextStyle(fontFeatureSettings = "tnum"))
+                    style = R3Base)
                 Spacer(Modifier.width(6.dp))
                 Text(u, Modifier.alignByBaseline(), fontSize = (if (cover) 12 else 13).sp, color = hb.colors.muted, maxLines = 1)
             }
@@ -201,9 +202,11 @@ private fun HeroCover(ctx: SectionContext, m: ActR3) {
         return
     }
     val rs = m.rings
-    // ring D 168 at the content corner, the chips stacked 16 to its right, centred on the ring (pitch 38)
-    Row(Modifier.fillMaxWidth().height(168.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (rs != null && rs.mode != RingMode.LIFETIME) SectionRings(rs, 168.dp)
+    // ring D 168 at the content corner, the chips stacked 16 to its right, centred on the ring (pitch 38);
+    // narrow screens (< 360) shrink the ring (min 136) so the widest chip ("Heart pts" ≈ 94) is not clipped
+    val d = (ctx.contentWidth - 32.dp - 16.dp - 96.dp).coerceIn(136.dp, 168.dp)
+    Row(Modifier.fillMaxWidth().height(d), verticalAlignment = Alignment.CenterVertically) {
+        if (rs != null && rs.mode != RingMode.LIFETIME) SectionRings(rs, d)
         Spacer(Modifier.width(16.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             m.chips.forEachIndexed { i, s -> PaceChip(s, R3Texts.CHIPS[i], 30.dp, compact = true) }

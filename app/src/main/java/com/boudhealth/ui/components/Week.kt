@@ -69,26 +69,3 @@ fun WeekZoneLine(
         WeekBar(p, height = barHeight, animate = animate)
     }
 }
-
-private fun ordinal(n: Int): String = n.toString() + when {
-    n % 100 in 11..13 -> "th"
-    n % 10 == 1 -> "st"
-    n % 10 == 2 -> "nd"
-    n % 10 == 3 -> "rd"
-    else -> "th"
-}
-
-/**
- * The one factual line under the rings (C4 rules, v4 rings; first rule that applies, never advice).
- * [values] / [goals] in ring index order (TodayRingSet: workout min today, intensity this week, steps today).
- * no data → "No activity synced yet today"; all closed → "All three rings closed · 3rd day this week";
- * else the two biggest remaining gaps → "12 workout min and 3,150 steps to go" (intensity says "… this week").
- */
-fun ringsInsight(values: List<Double>, goals: List<Int>, closedThisWeek: Int): String {
-    if (values.all { it <= 0.0 }) return "No activity synced yet today"
-    val p = values.indices.map { if (goals[it] <= 0) 0.0 else values[it] / goals[it] }
-    if (p.all { it >= 1.0 }) return "All three rings closed · ${ordinal(closedThisWeek.coerceAtLeast(1))} day this week"
-    val units = listOf("min", "%", "steps")
-    val open = p.indices.filter { p[it] < 1.0 }.sortedByDescending { 1.0 - p[it] }.take(2).sorted()
-    return open.joinToString(" and ") { i -> "${Fmt.num((goals[i] - values[i]).coerceAtLeast(0.0))} ${units[i]}" } + " to go"
-}

@@ -5,6 +5,8 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import com.boudhealth.render.ring.RingFonts
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * V2-122/126: the clock fonts measured and drawn with android.graphics (no Compose, no RemoteViews).
@@ -34,8 +36,15 @@ object ClockPaint {
         val b = Rect()
         p.getTextBounds("0", 0, 1, b)
         val s = p.textSize
-        return FontEm(-fm.ascent / s, fm.descent / s, -b.top / s, p.measureText(sample) / s)
+        return FontEm(-fm.ascent / s, fm.descent / s, -b.top / s, p.measureText(sample) / s, b.left / s)
     }
+
+    /**
+     * Wide layout: the date's start indent = the time font's left side bearing, so the date's left edge meets the digits'
+     * ink (it grows with the time size); capped so the widest date still fits the clock box. 0 in the centred layouts.
+     */
+    fun dateIndent(g: ClockGeometry, m: ClockMetrics): Float =
+        if (!g.wide) 0f else min(max(0f, m.time.lsb * g.timeSize), max(0f, g.clock.width - m.date.width * g.dateSize))
 
     fun measure(f: ClockFont): ClockMetrics = synchronized(cache) {
         cache.getOrPut(f) {
@@ -66,7 +75,8 @@ object ClockPaint {
             dp.color = if (f.dateAccent) accent else ink
             val text = if (f.dateCaps) date.uppercase() else date
             top += g.dateTop
-            c.drawText(text, x(dp, text), top + m.date.ascent * g.dateSize, dp)
+            // wide: the date's left edge on the digits' ink edge (the time font's side bearing grows with its size)
+            c.drawText(text, x(dp, text) + dateIndent(g, m), top + m.date.ascent * g.dateSize, dp)
         }
     }
 }

@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
             try {
                 // V2_SYNC_PERF: the indicator covers the Health Connect sync only; snapshot + widgets + history read
                 // continue in the background. Screens never wait for this: they show the cache and re-query on the bump.
-                status.lastSyncOk = withContext(Dispatchers.IO) { Refresh.runForeground(context) }
+                status.lastSyncOk = withContext(Dispatchers.IO) { Refresh.runForeground(context, force) }
                 lastForegroundSync = System.currentTimeMillis()
             } finally {
                 status.refreshing = false

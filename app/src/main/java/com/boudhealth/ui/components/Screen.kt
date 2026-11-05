@@ -250,10 +250,3 @@ fun SectionHeader(
         }
     }
 }
-
-/** For screens that need the padding values explicitly (e.g. a LazyColumn). */
-@Composable
-fun screenContentPadding(top: Dp = 0.dp): PaddingValues {
-    val g = LocalScreen.current.gutter
-    return PaddingValues(start = g, end = g, top = top, bottom = shellBottom + 24.dp)
-}

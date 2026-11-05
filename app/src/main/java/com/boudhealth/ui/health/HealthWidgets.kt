@@ -85,97 +85,6 @@ import kotlin.math.roundToInt
 // About card (B_SPEC §1): tile r 20, pad 16, info glyph 20 + titleS, body 14/20 muted, optional extra content.
 // =====================================================================================================================
 
-@Composable
-fun AboutCard(title: String, body: String, modifier: Modifier = Modifier, extra: (@Composable ColumnScope.() -> Unit)? = null) {
-    val hb = LocalHB.current
-    Column(modifier.fillMaxWidth().background(hb.colors.tile, HbShapes.group).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            GlyphIcon(Glyph.Info, size = 20.dp, color = hb.colors.text)
-            Spacer(Modifier.width(10.dp))
-            Text("About $title", style = hb.type.titleS, color = hb.colors.text)
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(body, style = hb.type.bodyS, color = hb.colors.muted)
-        if (extra != null) {
-            Spacer(Modifier.height(14.dp))
-            extra()
-        }
-    }
-}
-
-/** Band key for RHR / HRV: mini swatch with a line + sentence. */
-@Composable
-fun BandKey(color: Color, boldText: String, rest: String) {
-    val hb = LocalHB.current
-    Box(Modifier.fillMaxWidth().height(1.dp).background(hb.colors.grid))
-    Spacer(Modifier.height(12.dp))
-    Row(verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 2.dp).size(34.dp, 20.dp).background(hb.band(color).copy(alpha = 0.35f), RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(22.dp, 2.5.dp).background(color, RoundedCornerShape(2.dp)))
-        }
-        Spacer(Modifier.width(12.dp))
-        Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = hb.colors.text)) { append(boldText) }
-                append(" "); append(rest)
-            },
-            style = hb.type.bodyXS.copy(fontSize = 13.5.sp, lineHeight = 19.sp), color = hb.colors.muted,
-        )
-    }
-}
-
-/**
- * VO₂ category scale (B_SPEC About card): 4 segments 10 h, gap 3, rounded; the current segment in VO₂ at 45 %;
- * ink bubble with the value over a 2 dp stem at the exact position; names + ranges under it.
- */
-@Composable
-fun CategoryScale(value: Double, scale: Vo2Scale, color: Color) {
-    val hb = LocalHB.current
-    val measurer = rememberTextMeasurer()
-    val zone = scale.zoneOf(value)
-    val lo = scale.cuts[0] - 6.0
-    val hi = scale.cuts[2] + 6.0
-    Canvas(Modifier.fillMaxWidth().height(36.dp)) {
-        val gap = 3.dp.toPx()
-        val segW = (size.width - gap * 3) / 4f
-        val barTop = size.height - 10.dp.toPx()
-        val segBounds = listOf(lo, scale.cuts[0], scale.cuts[1], scale.cuts[2], hi)
-        for (i in 0..3) {
-            val x = i * (segW + gap)
-            val c = if (i == zone) color.copy(alpha = 0.45f) else hb.colors.text.copy(alpha = if (hb.dark) 0.14f else 0.09f)
-            drawRoundRect(c, Offset(x, barTop), Size(segW, 10.dp.toPx()), CornerRadius(5.dp.toPx()))
-        }
-        // marker position inside the zone's segment
-        val z = zone.coerceIn(0, 3)
-        val a = segBounds[z]; val b = segBounds[z + 1]
-        val f = ((value - a) / (b - a)).coerceIn(0.05, 0.95).toFloat()
-        val mx = z * (segW + gap) + segW * f
-        val label = measurer.measure(Fmt.num(value), TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = hb.colors.onInverse, fontFeatureSettings = "tnum"))
-        val bw = label.size.width + 14.dp.toPx(); val bh = 20.dp.toPx()
-        val bx = (mx - bw / 2f).coerceIn(0f, size.width - bw)
-        drawLine(hb.colors.inverse, Offset(mx, bh), Offset(mx, barTop + 10.dp.toPx()), 2.dp.toPx())
-        drawRoundRect(hb.colors.inverse, Offset(bx, 0f), Size(bw, bh), CornerRadius(bh / 2))
-        drawText(label, topLeft = Offset(bx + (bw - label.size.width) / 2f, (bh - label.size.height) / 2f))
-    }
-    Spacer(Modifier.height(6.dp))
-    Row(Modifier.fillMaxWidth()) {
-        for (i in 0..3) {
-            val cur = i == zone
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(scale.names[i], style = hb.type.caption.copy(fontWeight = if (cur) FontWeight.Bold else FontWeight.Normal),
-                    color = if (cur) hb.legible(color, hb.colors.tile) else hb.colors.muted, maxLines = 1)
-                Text(scale.rangeText(i), style = hb.type.caption.copy(fontWeight = if (cur) FontWeight.Bold else FontWeight.Normal),
-                    color = if (cur) hb.legible(color, hb.colors.tile) else hb.colors.muted, maxLines = 1)
-            }
-        }
-    }
-    Spacer(Modifier.height(10.dp))
-    Text(
-        if (scale.ageLabel != null) "Typical ranges for men aged ${scale.ageLabel}." else "Typical ranges for men aged 40–49. Add your birth year in Settings for your age group.",
-        style = hb.type.bodyXS, color = hb.colors.muted,
-    )
-}
-
 // =====================================================================================================================
 // History row (glyph-less list row, B_SPEC §1)
 // =====================================================================================================================
@@ -294,135 +203,14 @@ fun StatusPill(text: String, kind: PillKind, modifier: Modifier = Modifier, glyp
     }
 }
 
-/** Quick preset chip in sheets: sheetTile, h 34, "BMI 25 · 84.6". */
-@Composable
-fun QuickChip(label: String, value: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val hb = LocalHB.current
-    val shape = RoundedCornerShape(17.dp)
-    Row(modifier.height(34.dp).hbClickable(shape = shape, scaleOnPress = false, onClick = onClick).background(hb.colors.sheetTile, shape).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Medium, color = hb.colors.text)) { append(label) }
-                withStyle(SpanStyle(color = hb.colors.muted)) { append(" · ") }
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(value) }
-            },
-            style = hb.type.bodyS, maxLines = 1,
-        )
-    }
-}
-
 // =====================================================================================================================
 // WHtR gauge (B_SPEC §2): 12 h bar 0.40–0.65 in three zones, ink ticks at 0.5 / 0.6, marker r 8 + value bubble.
 // =====================================================================================================================
-
-@Composable
-fun WhtrGauge(whtr: Double, modifier: Modifier = Modifier) {
-    val hb = LocalHB.current
-    val measurer = rememberTextMeasurer()
-    val green = Cat.healthyMark
-    val amber = Cat.fat
-    val red = Cat.waist
-    Canvas(modifier.fillMaxWidth().height(70.dp)) {
-        val lo = 0.40; val hi = 0.65
-        fun x(v: Double) = ((v - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f) * size.width
-        val barTop = 28.dp.toPx(); val bh = 12.dp.toPx()
-        val a = if (hb.dark) 0.55f else 0.6f
-        // three zones, rounded ends only on the outside
-        drawRoundRect(green.copy(alpha = a), Offset(0f, barTop), Size(x(0.5), bh), CornerRadius(bh / 2))
-        drawRect(amber.copy(alpha = a), Offset(x(0.5), barTop), Size(x(0.6) - x(0.5), bh))
-        drawRoundRect(red.copy(alpha = a), Offset(x(0.6), barTop), Size(size.width - x(0.6), bh), CornerRadius(bh / 2))
-        drawRect(red.copy(alpha = a), Offset(x(0.6), barTop), Size(bh, bh))
-        // ticks
-        for (t in listOf(0.5, 0.6)) drawLine(hb.colors.text, Offset(x(t), barTop - 4.dp.toPx()), Offset(x(t), barTop + bh + 4.dp.toPx()), 2.dp.toPx())
-        // marker + bubble
-        val mx = x(whtr)
-        drawCircle(hb.colors.surface, 10.dp.toPx(), Offset(mx, barTop + bh / 2))
-        drawCircle(hb.colors.text, 8.dp.toPx(), Offset(mx, barTop + bh / 2))
-        val lbl = measurer.measure(Fmt.num(whtr, 2), TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = hb.colors.onInverse, fontFeatureSettings = "tnum"))
-        val bw = lbl.size.width + 14.dp.toPx(); val bubH = 20.dp.toPx()
-        val bx = (mx - bw / 2f).coerceIn(0f, size.width - bw)
-        drawRoundRect(hb.colors.inverse, Offset(bx, 0f), Size(bw, bubH), CornerRadius(bubH / 2))
-        drawText(lbl, topLeft = Offset(bx + (bw - lbl.size.width) / 2f, (bubH - lbl.size.height) / 2f))
-        // labels
-        val ly = barTop + bh + 8.dp.toPx()
-        val st = TextStyle(fontSize = 11.sp, color = hb.colors.muted)
-        val bold = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum")
-        drawText(measurer.measure("Healthy", st), topLeft = Offset(0f, ly))
-        measurer.measure("0.5", bold).let { drawText(it, topLeft = Offset(x(0.5) - it.size.width / 2f, ly)) }
-        measurer.measure("Raised", st).let { drawText(it, topLeft = Offset((x(0.5) + x(0.6)) / 2f - it.size.width / 2f, ly)) }
-        measurer.measure("0.6", bold).let { drawText(it, topLeft = Offset(x(0.6) - it.size.width / 2f, ly)) }
-        measurer.measure("High", st).let { drawText(it, topLeft = Offset(size.width - it.size.width, ly)) }
-    }
-}
 
 // =====================================================================================================================
 // Recomposition chart (B_SPEC §2): change since the period start, lean + fat lines from a shared dotted zero,
 // area between zero and the fat line tinted, end labels.
 // =====================================================================================================================
-
-@Composable
-fun RecompChart(lean: List<Pt>, fat: List<Pt>, start: LocalDate, end: LocalDate, modifier: Modifier = Modifier, height: Dp = 170.dp) {
-    val hb = LocalHB.current
-    val measurer = rememberTextMeasurer()
-    val loc = Locale.getDefault()
-    val l0 = lean.firstOrNull()?.v
-    val f0 = fat.firstOrNull()?.v
-    val ld = if (l0 == null) emptyList() else lean.map { it.at to it.v - l0 }
-    val fd = if (f0 == null) emptyList() else fat.map { it.at to it.v - f0 }
-    val leanC = Cat.lean
-    val fatC = Cat.fat
-    Canvas(modifier.fillMaxWidth().height(height)) {
-        val top = 22.dp.toPx(); val bottom = size.height - 24.dp.toPx()
-        val right = size.width - 64.dp.toPx()
-        val all = ld.map { it.second } + fd.map { it.second } + 0.0
-        val hiV = max(0.5, all.maxOrNull() ?: 0.5)
-        val loV = min(-0.5, all.minOrNull() ?: -0.5)
-        val x0 = start.atStartOfDay()
-        val span = max(1L, ChronoUnit.HOURS.between(x0, end.atStartOfDay())).toFloat()
-        fun xOf(t: LocalDateTime) = (ChronoUnit.HOURS.between(x0, t) / span).coerceIn(0f, 1f) * right
-        fun yOf(v: Double) = top + ((hiV - v) / (hiV - loV)).toFloat() * (bottom - top)
-        val zy = yOf(0.0)
-        // zero line + label
-        drawLine(hb.colors.muted.copy(alpha = 0.6f), Offset(0f, zy), Offset(right, zy), 1.5.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 3.dp.toPx())))
-        val zl = measurer.measure("${DateTimeFormatter.ofPattern("MMM yyyy", loc).format(start)} level", TextStyle(fontSize = 11.sp, color = hb.colors.muted))
-        drawText(zl, topLeft = Offset(0f, zy - zl.size.height - 4.dp.toPx()))
-        // fat area between zero and the fat line
-        if (fd.size >= 2) {
-            val area = Path().apply {
-                moveTo(xOf(fd.first().first), zy)
-                fd.forEach { (t, v) -> lineTo(xOf(t), yOf(v)) }
-                lineTo(xOf(fd.last().first), zy); close()
-            }
-            drawPath(area, fatC.copy(alpha = if (hb.dark) 0.22f else 0.18f))
-        }
-        fun line(pts: List<Pair<LocalDateTime, Double>>, c: Color) {
-            if (pts.isEmpty()) return
-            val p = Path()
-            pts.forEachIndexed { i, (t, v) -> if (i == 0) p.moveTo(xOf(t), yOf(v)) else p.lineTo(xOf(t), yOf(v)) }
-            drawPath(p, c, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            val e = Offset(xOf(pts.last().first), yOf(pts.last().second))
-            drawCircle(hb.colors.tile, 6.dp.toPx(), e)
-            drawCircle(c, 4.5.dp.toPx(), e)
-            val t = measurer.measure("${Fmt.delta(pts.last().second, 1)} kg", TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = hb.legible(c, hb.colors.tile), fontFeatureSettings = "tnum"))
-            drawText(t, topLeft = Offset(e.x + 9.dp.toPx(), e.y - t.size.height / 2f))
-        }
-        line(ld, leanC)
-        line(fd, fatC)
-        // x labels: 4–5 months
-        val months = ChronoUnit.MONTHS.between(start.withDayOfMonth(1), end.withDayOfMonth(1)).toInt().coerceAtLeast(1)
-        val stepM = max(1, (months + 3) / 4)
-        var d = start.withDayOfMonth(1)
-        if (d.isBefore(start)) d = d.plusMonths(1)
-        while (d.isBefore(end)) {
-            val lbl = measurer.measure(DateTimeFormatter.ofPattern("MMM", loc).format(d), TextStyle(fontSize = 11.sp, color = hb.colors.muted))
-            val x = xOf(d.atStartOfDay())
-            drawText(lbl, topLeft = Offset((x - lbl.size.width / 2f).coerceIn(0f, right - lbl.size.width), bottom + 8.dp.toPx()))
-            d = d.plusMonths(stepM.toLong())
-        }
-    }
-}
 
 // =====================================================================================================================
 // Add waist sheet (DESIGN §5.11 example): big stepper + "Read from tape" tonal + "Save measurement" primary.
@@ -446,6 +234,3 @@ fun AddWaistSheet(last: Sample?, onDismiss: () -> Unit, onSave: (Double) -> Unit
         Text("Stays on this phone.", style = hb.type.bodyXS, color = hb.colors.muted, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
-
-/** |a − b| formatted with the unit, for "3.4 cm to reach 0.5". */
-fun absText(v: Double, decimals: Int, unit: String): String = "${Fmt.num(abs(v), decimals)} $unit"

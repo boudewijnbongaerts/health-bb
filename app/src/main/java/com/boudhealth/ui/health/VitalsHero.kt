@@ -19,10 +19,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -34,13 +36,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.boudhealth.data.SectionPeriod
+import com.boudhealth.data.TrendDir
 import com.boudhealth.ui.section.DeltaPill
+import com.boudhealth.ui.section.DeltaPillModel
+import com.boudhealth.ui.section.Tone
 import com.boudhealth.ui.section.R3Texts
 import com.boudhealth.ui.section.ScrubState
 import com.boudhealth.ui.section.SectionContext
 import com.boudhealth.ui.section.rememberScrub
 import com.boudhealth.ui.section.scrubAndTap
 import com.boudhealth.ui.theme.LocalHB
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -62,13 +68,20 @@ fun VitalsHero(ctx: SectionContext) {
     val m = VitalsModels.of(ctx) ?: return
     val hb = LocalHB.current
     val scrub = rememberScrub(ctx.scope to "vitals-hero")
+    val ld = remember(m) { LaneData(m) }
+    if (ld.buckets.none { it.value != null } && m.reading("rhr").at == null) {
+        Box(Modifier.fillMaxWidth().height(if (ctx.wide) 380.dp else 120.dp), contentAlignment = Alignment.Center) {
+            Text(R3Texts.NO_DATA_PERIOD, fontSize = 13.sp, color = hb.colors.muted)
+        }
+        return
+    }
     if (ctx.wide) {
         Row(Modifier.fillMaxSize()) {
             HeroLeft(m, cover = false, modifier = Modifier.width(LEFT_W).fillMaxHeight())
             Spacer(Modifier.width(DIVIDER_X - LEFT_W))
             Box(Modifier.width(1.dp).fillMaxHeight().background(hb.colors.grid.copy(alpha = 0.8f)))
             Spacer(Modifier.width(LANES_X - DIVIDER_X - 1.dp))
-            VitalsLanes(ctx, m, scrub, cover = false, modifier = Modifier.weight(1f).fillMaxHeight().padding(top = 2.dp))
+            VitalsLanes(ctx, m, ld, scrub, cover = false, modifier = Modifier.weight(1f).fillMaxHeight().padding(top = 2.dp))
         }
     } else {
         Column(Modifier.fillMaxWidth()) {
@@ -76,7 +89,7 @@ fun VitalsHero(ctx: SectionContext) {
             Spacer(Modifier.height(8.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(hb.colors.grid.copy(alpha = 0.8f)))
             Spacer(Modifier.height(13.dp))
-            VitalsLanes(ctx, m, scrub, cover = true, modifier = Modifier.fillMaxWidth().height(LANES_H_COVER))
+            VitalsLanes(ctx, m, ld, scrub, cover = true, modifier = Modifier.fillMaxWidth().height(LANES_H_COVER))
         }
     }
 }
@@ -91,13 +104,21 @@ private fun HeroLeft(m: VitalsModel, cover: Boolean, modifier: Modifier) {
     val f = m.f
     val c = vitalColor("rhr")
     val rd = m.reading("rhr")
-    val pill = vPill("rhr", m.pill("rhr"), f)
+    val vp = m.pill("rhr")
+    // both days above and below the range: one pill each on two rows (pitch 30) instead of one ellipsized pill
+    val split: List<DeltaPillModel>? = (vp as? VPill.Out)?.o?.takeIf { it.above.isNotEmpty() && it.below.isNotEmpty() }?.let { o ->
+        listOfNotNull(
+            R3Texts.outsidePill(o.above.size, 0, f.period)?.let { DeltaPillModel(TrendDir.UP, it, Tone.NEUTRAL) },
+            R3Texts.outsidePill(0, o.below.size, f.period)?.let { DeltaPillModel(TrendDir.DOWN, it, Tone.NEUTRAL) },
+        ).takeIf { it.size == 2 }
+    }
+    val pills = split ?: listOfNotNull(vPill("rhr", vp, f))
     // text lines (baselines from the content top): label 16.5 · value 86 (cover 52.4) · date +28 (+22) · pill +58 (+46)
     val vfs = if (cover) 40f else 56f
     val vb = if (cover) 18f + vfs * 0.86f else 86f
     val ctxB = vb + if (cover) 22f else 28f
     val pillC = vb + if (cover) 46f else 58f
-    val blockTop = pillC + if (cover) 26f else 30f
+    val blockTop = pillC + (if (cover) 26f else 30f) + 30f * (pills.size - 1).coerceAtLeast(0)
     Box(modifier) {
         Box(Modifier.offset(0.dp, 8.dp).size(8.dp).background(c, CircleShape))
         Text(R3Texts.RESTING_HR, fontSize = (if (cover) 12.5f else 13f).sp, fontWeight = FontWeight.SemiBold, color = hb.legible(c), maxLines = 1,
@@ -112,7 +133,7 @@ private fun HeroLeft(m: VitalsModel, cover: Boolean, modifier: Modifier) {
             Text(if (rd.carried) R3Texts.lastMeasured(at.day, f.today) else vDay(at.day, f.today), fontSize = (if (cover) 12f else 12.5f).sp,
                 color = hb.colors.muted, maxLines = 1, modifier = Modifier.paddingFromBaseline(top = ctxB.dp))
         }
-        if (pill != null) Box(Modifier.offset(0.dp, (pillC - 12f).dp).height(24.dp)) { DeltaPill(pill) }
+        pills.forEachIndexed { k, pl -> Box(Modifier.offset(0.dp, (pillC + 30f * k - 12f).dp).height(24.dp)) { DeltaPill(pl) } }
         RangeBlock(m, cover, Modifier.padding(top = blockTop.dp).fillMaxWidth().fillMaxHeight())
     }
 }
@@ -199,10 +220,9 @@ private class LaneData(m: VitalsModel) {
 }
 
 @Composable
-private fun VitalsLanes(ctx: SectionContext, m: VitalsModel, scrub: ScrubState, cover: Boolean, modifier: Modifier) {
+private fun VitalsLanes(ctx: SectionContext, m: VitalsModel, ld: LaneData, scrub: ScrubState, cover: Boolean, modifier: Modifier) {
     val ink = rememberInk()
     val hb = LocalHB.current
-    val ld = remember(m) { LaneData(m) }
     val dom = ld.dom
     val f = m.f
     val labW = if (cover) 96f else 128f
@@ -229,8 +249,16 @@ private fun VitalsLanes(ctx: SectionContext, m: VitalsModel, scrub: ScrubState, 
                 if (li < specs.lastIndex) drawLine(ink.grid.copy(alpha = 0.6f), Offset(px, yy + lh + u(gap) / 2f), Offset(px + pw, yy + lh + u(gap) / 2f), u(0.6))
                 if (id == "hr") {
                     val rows = ld.hrDrawn
-                    val p = VPlot(px, yy + u(3), pw, lh - u(6), rows.size, lo, hi)
-                    if (rows.count { it != null } < 6) vCapsules(p, rows, c, 8f, 0.85f) else vBandFill(p, rows, c, 0.30f)
+                    // 1Y / All: the Monday–Sunday weeks mapped onto the month domain by date (same x-scale as the cursor)
+                    val p = if (ld.weeks != null) {
+                        val first = dom.keys.first()
+                        val span = ChronoUnit.DAYS.between(first, VitalsMath.monthEnd(dom.keys.last()).plusDays(1)).toFloat()
+                        val d0 = ChronoUnit.DAYS.between(first, SectionPeriod.mondayOf(first)).toFloat()
+                        VPlot(px + pw * d0 / span, yy + u(3), pw * rows.size * 7f / span, lh - u(6), rows.size, lo, hi)
+                    } else VPlot(px, yy + u(3), pw, lh - u(6), rows.size, lo, hi)
+                    clipRect(px, yy, px + pw, yy + lh) {
+                        if (rows.count { it != null } < 6) vCapsules(p, rows, c, 8f, 0.85f) else vBandFill(p, rows, c, 0.30f)
+                    }
                 } else {
                     val rows = ld.rows[id]!!
                     val band = ld.bands[id]
@@ -245,8 +273,14 @@ private fun VitalsLanes(ctx: SectionContext, m: VitalsModel, scrub: ScrubState, 
                 textAt(ink, vitalTitle(id), 0f, yy + u(12), nameFs, hb.legible(c), FontWeight.SemiBold, tnum = false)
                 val vfs = if (cover) 13f else 15f
                 val vbl = yy + u(12 + vfs + 6)
-                val vw = textAt(ink, values[id]!!, 0f, vbl, vfs, ink.text, FontWeight.Bold)
-                textAt(ink, vUnit(id), vw + u(3), vbl, if (cover) 10f else 11f, ink.muted)
+                val ufs = if (cover) 10f else 11f
+                var fit = vfs
+                if (cover) {
+                    val uw = textWidth(ink, vUnit(id), ufs, FontWeight.Normal, density)
+                    while (fit > 11f && textWidth(ink, values[id]!!, fit, FontWeight.Bold, density) + u(3) + uw > u(labW - 4)) fit -= 0.5f
+                }
+                val vw = textAt(ink, values[id]!!, 0f, vbl, fit, ink.text, FontWeight.Bold)
+                textAt(ink, vUnit(id), vw + u(3), vbl, ufs, ink.muted)
                 if (!cover) {
                     val band = ld.bands[id]
                     if (id == "hr") textAt(ink, if (ld.month) R3Texts.WEEKLY_RANGE else R3Texts.DAILY_RANGE, 0f, yy + u(51), 10.5f, ink.muted, tnum = false)
@@ -263,6 +297,8 @@ private fun VitalsLanes(ctx: SectionContext, m: VitalsModel, scrub: ScrubState, 
             val labels = dom.labels.toMutableList()
             var ti = dom.todayIndex
             if (mark != null && ti != null && abs(ti - mark) <= 1 && ti != mark && ap.slot < u(20)) { labels[ti] = null; ti = null }
+            // narrow slots (1Y on the cover): the today circle would touch its neighbouring month letters
+            ti?.let { t -> if (ap.slot < u(20)) { if (t > 0) labels[t - 1] = null; if (t < labels.lastIndex) labels[t + 1] = null } }
             vAxisLabels(ink, ap, labels, ti, if (mark != null && mark != ti) mark else null, dom.futureFrom)
         }
         // one gesture layer over the plot area: tap = select the day (1Y → month, All → year), hold + slide = shared cursor

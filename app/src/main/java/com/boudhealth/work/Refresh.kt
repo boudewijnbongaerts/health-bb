@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import com.boudhealth.App
 import com.boudhealth.data.Cache
 import com.boudhealth.data.Derive
+import com.boudhealth.data.GoogleHealth
 import com.boudhealth.data.HcReader
 import com.boudhealth.data.Snapshots
 import com.boudhealth.data.Sync
@@ -33,6 +34,8 @@ object Refresh {
         val ok = if (HcReader.available(app)) {
             Sync.run(app, if (foreground) Sync.Mode.FOREGROUND else Sync.Mode.BACKGROUND).ok
         } else false
+        // Google Health API (VO2 max): at most every 6 hours, never throws; written before the snapshot below
+        GoogleHealth.syncIfDue(app, force = false)
         publish(app)
         if (foreground) Sync.startBackfillIfNeeded(app)
         return ok
@@ -46,13 +49,17 @@ object Refresh {
      * sync indicator ends as soon as the data is in the cache. The snapshot + widget bitmaps (publish) and the history
      * loop (only when something is left to read) follow in the background. Screens read the cache themselves and
      * re-query on the Sync.version bump. Returns whether the Health Connect sync succeeded.
+     * [force] = user action (Sync now, pull, permission result): the Google Health API fetch skips its 6-hour gate.
      */
-    suspend fun runForeground(context: Context): Boolean {
+    suspend fun runForeground(context: Context, force: Boolean = false): Boolean {
         val app = context.applicationContext
         val ok = if (HcReader.available(app)) Sync.run(app, Sync.Mode.FOREGROUND).ok else false
         bg.launch {
             publish(app)
             Sync.startBackfillIfNeeded(app)
+            // Google Health API (VO2 max): every 6 hours, or now on Sync now / pull ([force]); network after the
+            // snapshot so it never delays it; a second publish only when it wrote something
+            if (GoogleHealth.syncIfDue(app, force)) publish(app)
         }
         return ok
     }
@@ -71,6 +78,7 @@ object Refresh {
             withContext(Dispatchers.IO) {
                 val cache = Cache.get(app)
                 Sync.mirrorManual(cache, waist, height)
+                cache.mirrorGh() // Google Health API days back into `daily` after a schema upgrade (no-op otherwise)
                 Derive.ensureZoneParams(cache, goals)
                 // nothing cached yet (first start): keep "Loading…" instead of a dashboard full of zeros
                 if (cache.hasAnyData()) Snapshots.build(cache, goals, height.lastOrNull()?.value) else null

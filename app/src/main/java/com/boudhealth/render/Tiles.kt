@@ -60,7 +60,8 @@ class Tiles(private val k: Ink, private val s: TileSource) {
     private fun empty(id: String, w: Float, h: Float, label: String = com.boudhealth.data.Metrics.find(id)?.label ?: id) {
         val p = if (w < 120f) 12f else 14f
         k.labelRow(p, p - 1f, w - p, t.muted, k.fit(label, w - 2 * p - 14f, 13f, 600), null)
-        k.text("No data yet", p, h - p - 2f, 12f, t.muted, 500)
+        val nfs = if (k.measure("No data yet", 12f, 500) <= w - 2 * p) 12f else max(10.5f, 12f * (w - 2 * p) / k.measure("No data yet", 12f, 500))
+        k.text(k.fit("No data yet", w - 2 * p, nfs, 500), p, h - p - 2f, nfs, t.muted, 500)
     }
 
     private fun subLine(x: Float, y: Float, short: String, delta: Delta?, maxW: Float) {
@@ -78,13 +79,21 @@ class Tiles(private val k: Ink, private val s: TileSource) {
         change ?: return null
         val a = abs(change)
         val txt = Fmt.num(a, decimals)
-        if (a < noise) return Delta("No change", null, Ink.Tone.NEUTRAL, Ink.Dir.NONE)
+        if (a < noise) return Delta("Same", null, Ink.Tone.NEUTRAL, Ink.Dir.NONE)
         val up = change > 0
         val tone = when (higherIsBetter) { null -> Ink.Tone.NEUTRAL; true -> if (up) Ink.Tone.GOOD else Ink.Tone.BAD; false -> if (up) Ink.Tone.BAD else Ink.Tone.GOOD }
         return Delta(fmt(txt), txt, tone, if (up) Ink.Dir.UP else Ink.Dir.DOWN)
     }
 
     private fun change(v: List<Double>): Double? = if (v.size >= 2) v.last() - v.first() else null
+
+    /** Item 46: last calendar month's lowest–highest (the Vitals tab's "{previous month}" row), not an average band. */
+    private fun lastMonthRange(id: String): Pair<Double, Double>? {
+        val ym = java.time.YearMonth.from(s.today).minusMonths(1)
+        val days = java.time.temporal.ChronoUnit.DAYS.between(ym.atDay(1), s.today) + 1
+        val v = s.daily(id, days).filter { !it.date.isAfter(ym.atEndOfMonth()) && !it.v.isNaN() }.map { it.v }
+        return if (v.isEmpty()) null else v.min() to v.max()
+    }
 
     // =================================================================== generic metric tile
 
@@ -112,30 +121,37 @@ class Tiles(private val k: Ink, private val s: TileSource) {
 
     private fun metric(d: Def, size: TileSize, w: Float, h: Float) {
         val v = d.value ?: "–"
+        // narrow tiles: the short name ("Body fat", "Waist") instead of a long label that would run past the edge
+        fun label(p: Float, fs: Float = 13f) = if (k.measure(d.label, fs, 600) <= w - 2 * p - 14f + 6f) d.label else d.short
         when (size) {
             // V2-094: every S tile = glyph circle + value (+ unit) + mini name (the metric's short name), nothing else;
             // only an approved corner fact (Heart rate "bpm") stays
             TileSize.S -> TileArt.small(k, w, h, d.glyph, d.col, d.sValue ?: v, if (d.sValue != null) null else d.unit.ifEmpty { null }, d.sShort ?: d.short, corner = d.sCorner?.takeIf { d.value != null })
             TileSize.M -> {
                 val p = 14f
-                k.labelRow(p, p - 1f, w - p, d.col, d.label, null)
-                k.value(v, d.unit, p, h - 15.5f, 24f)
+                k.labelRow(p, p - 1f, w - p, d.col, label(p), null)
+                val valW = k.value(v, d.unit, p, h - 15.5f, 24f)
                 val vw = min(d.mvw, w * 0.42f); val vh = h - 2 * p - 22f
-                if (d.value != null) d.mLine?.invoke(p, p + 31f, w - 2 * p - vw - 8f)
-                if (d.value != null) d.viz?.invoke(w - p - vw, h - p - vh, vw, vh, size)
+                // the chart starts right of the value + unit (never under "/min", "kg")
+                val vx = max(w - p - vw, p + valW + 6f)
+                // the extra line only where it clears the value below it (short cover-screen M tiles drop it)
+                if (d.value != null && h >= 84f) d.mLine?.invoke(p, p + 31f, vx - p - 8f)
+                // QA_FINAL: a value whose chart has no room just drops the chart (never "No data yet" over the value)
+                if (d.value != null) { if (w - p - vx > 8f) d.viz?.invoke(vx, h - p - vh, w - p - vx, vh, size) }
                 else k.text("No data yet", w - p, h - 15.5f, 12f, t.muted, 500, Paint.Align.RIGHT)
             }
             TileSize.L -> {
                 val p = 16f
-                k.labelRow(p, p - 1f, w - p, d.col, d.label, d.meta)
-                k.value(v, d.unitL ?: d.unit, p, 66.8f, 32f, 16f)
+                k.labelRow(p, p - 1f, w - p, d.col, label(p), d.meta)
+                // a long L unit ("ml/kg/min") falls back to the short one when it would run past the tile
+                k.value(v, d.unitL?.takeIf { k.valueWidth(v, it, 32f, 16f) <= w - 2 * p } ?: d.unit, p, 66.8f, 32f, 16f)
                 when {
                     d.value == null -> k.text("No data yet", p, 95f, 12.5f, t.muted)
                     d.lctx != null -> {
                         val tw = k.text(k.fit(d.lctx, w - 2 * p - if (d.info) 18f else 0f, 12.5f), p, 95f, 12.5f, t.muted)
                         if (d.info) k.glyph(Glyph.Info, p + tw + 4f, 95f - 11f, 14f, t.muted, 2.2f)
                     }
-                    d.delta != null -> k.pill(d.delta.text, d.delta.tone, d.delta.dir, p, 82f, maxW = w - 2 * p)
+                    d.delta != null -> k.pill(pillText(d.delta, w - 2 * p), d.delta.tone, d.delta.dir, p, 82f, maxW = w - 2 * p)
                     d.ctx != null -> k.text(k.fit(d.ctx, w - 2 * p, 12.5f), p, 95f, 12.5f, t.muted)
                 }
                 val vy = p + 104f
@@ -147,11 +163,11 @@ class Tiles(private val k: Ink, private val s: TileSource) {
                 val vx = p + lw + 8f; val vy = p + 34f
                 val vw = w - vx - p - if (d.xlGrid) 26f else 0f
                 val vh = h - vy - p - if (d.xlLabels) 16f else 0f
-                k.labelRow(p, p - 1f, w - p, d.col, d.label, d.meta, 14f)
+                k.labelRow(p, p - 1f, w - p, d.col, label(p, 14f), d.meta, 14f)
                 k.value(v, d.unitL ?: d.unit, p, 87.6f, 44f, 22f)
                 val ctx = if (d.value == null) "No data yet" else d.ctx
                 ctx?.let { c -> k.wrap(c, lw, 12.5f).forEachIndexed { i, line -> k.text(line, p, 117f + i * 17f, 12.5f, t.muted) } }
-                d.delta?.let { k.pill(it.text, it.tone, it.dir, p, h - p - 24f, 24f, lw) }
+                d.delta?.let { k.pill(pillText(it, lw), it.tone, it.dir, p, h - p - 24f, 24f, lw) }
                 if (d.value != null) d.viz?.invoke(vx, vy, vw, vh, size)
             }
         }
@@ -175,7 +191,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
                         val vals = yr.map { it.v }
                         val ticks = niceTicks(vals.min(), vals.max())
                         val idx = listOf(0, yr.size / 3, 2 * yr.size / 3, yr.size - 1).distinct()
-                        val mf = DateTimeFormatter.ofPattern("MMM", Locale.getDefault())
+                        val mf = DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH)
                         k.spark(vals, x, y, w, h, t.text, Ink.SparkOpts(area = true, areaAlpha = 0.12f, grid = ticks, pad = 4f,
                             min = min(vals.min(), ticks.first()) - 0.3, max = max(vals.max(), ticks.last()) + 0.3,
                             xLabels = idx.map { i -> (i.toFloat() / (yr.size - 1)) to mf.format(yr[i].date) }))
@@ -199,7 +215,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
                     lctx = whtr?.let { "WHtR ${Fmt.num(it, 2)}" }, info = whtr != null,
                     mLine = prev?.takeIf { abs(it) >= 0.05 }?.let { pv ->
                         val prevDay = s.daily("waist", 365).takeLast(2).firstOrNull()?.date
-                        factLine("${if (pv < 0) "▼" else "▲"}${n1(abs(pv))} cm${prevDay?.let { " since ${Fmt.dayLabel(it, s.today)}" } ?: ""}")
+                        factLine("${if (pv < 0) "▼" else "▲"} ${n1(abs(pv))} cm${prevDay?.let { " vs ${Fmt.dayLabel(it, s.today).let { d -> if (d == "Yesterday" || d == "Today") d.lowercase() else d }}" } ?: ""}")
                     }) { x, y, w, h, sz ->
                     if (sz == TileSize.M && whtr != null) {
                         val top = y + max(0f, h - 30f)
@@ -235,7 +251,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
             }
             "rhr" -> {
                 val v14 = s.values("rhr", 14)
-                val band = r?.band
+                val band = lastMonthRange("rhr")   // item 46: last month's lowest–highest (was mean ± 1 SD of 60 days)
                 val bandTxt = band?.let { "${n0(it.first)}–${n0(it.second)}" }
                 // V2 (no averages): latest reading vs the previous reading, with that reading's day
                 val rd30 = s.daily("rhr", 30)
@@ -255,7 +271,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
             }
             "hrv" -> {
                 val v14 = s.values("hrv", 14)
-                val band = s.band("hrv")
+                val band = lastMonthRange("hrv")   // item 46: last month's lowest–highest (was mean ± 1 SD of 60 days)
                 // restored (audit 1.4): latest night vs the previous reading ("N ms vs <day>"), no judgement colour
                 val hp = s.daily("hrv", 30)
                 val hChg = if (hp.size >= 2) hp.last().v - hp[hp.size - 2].v else null
@@ -286,7 +302,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
             "vo2" -> {
                 val v90 = s.values("vo2", 91)
                 val frac = r?.let { ((it.value - 20.0) / 40.0).toFloat() } ?: 0f
-                val vd = delta(change(v90), true, 0.1, 1) { "$it in 3 months" }
+                val vd = delta(change(v90), true, 0.1, 1) { "$it vs 3 months ago" }
                 Def(Hue.vo2, Glyph.Vo2Max, "VO₂ max", "VO₂ max", r?.let { Fmt.dayLabel(it.day, s.today) }, r?.let { n1(it.value) }, "", vd,
                     mvw = 60f, unitL = "ml/kg/min",
                     // V7-R17 "VO₂ S/M arrows": the 3-month direction as ▲ / ▼ in the S corner (M keeps its chip)
@@ -297,13 +313,14 @@ class Tiles(private val k: Ink, private val s: TileSource) {
                         val gw = min(70f, h * 1.25f)
                         k.gauge(x, y, gw, h, frac, Hue.vo2, 8f)
                         if (v90.size >= 2) k.spark(v90, x + gw + 12f, y, w - gw - 12f, h - 14f, Hue.vo2, Ink.SparkOpts(sw = 2f))
-                        k.text("Last 3 months", x + gw + 12f, y + h - 1f, 11f, t.muted)
+                        val lt = if (k.measure("Last 3 months", 11f) <= w - gw - 12f) "Last 3 months" else "3 months"
+                        k.text(k.fit(lt, w - gw - 12f, 11f), x + gw + 12f, y + h - 1f, 11f, t.muted)
                     }
                 }
             }
             "breathing" -> {
                 val v14 = s.values("breathing", 14)
-                val band = s.band("breathing")
+                val band = lastMonthRange("breathing")   // item 46: last month's lowest–highest (was mean ± 1 SD of 60 days)
                 Def(Hue.resp, Glyph.Lungs, "Breathing rate", "Breathing", r?.let { nightMeta(it.day) }, r?.let { n1(it.value) }, "/min",
                     ) { x, y, w, h, _ ->
                     k.spark(v14, x, y, w, h, Hue.resp, Ink.SparkOpts(band = band, sw = 2f))
@@ -335,7 +352,20 @@ class Tiles(private val k: Ink, private val s: TileSource) {
 
     /** deltaChip as the M extra line; nothing under the noise threshold. */
     private fun chipLine(dl: Delta?): ((Float, Float, Float) -> Unit)? =
-        dl?.takeIf { it.short != null }?.let { d -> { x, base, mw -> k.deltaChip(d.text, d.tone, d.dir, x, base - 14f, mw) } }
+        dl?.takeIf { it.short != null }?.let { d -> { x, base, mw ->
+            // the chip sizes to its text: full "1.2 kg · 30 d", else "1.2 kg", else the number; never "1.2 k…"
+            val arrow = when (d.dir) { Ink.Dir.UP -> "▲"; Ink.Dir.DOWN -> "▼"; Ink.Dir.NONE -> "" }
+            val label = listOf(d.text, d.text.substringBefore(" · "), d.text.substringBefore(" vs "), d.short!!)
+                .firstOrNull { k.measure(arrow + it, 10.5f, 700) + 14f <= mw } ?: d.short!!
+            k.deltaChip(label, d.tone, d.dir, x, base - 14f, mw)
+        } }
+
+    /** L / XL pill text: full, else the part before " · " / " vs ", else the number; never "2 bpm vs yesterd…". */
+    private fun pillText(d: Delta, maxW: Float): String {
+        val chrome = if (d.dir == Ink.Dir.NONE) 18f else 32f   // pill pads (+ ▲ / ▼), as Ink.pill
+        return listOfNotNull(d.text, d.text.substringBefore(" · "), d.text.substringBefore(" vs "), d.short)
+            .firstOrNull { k.measure(it, 11.5f, 600) + chrome <= maxW } ?: d.text
+    }
 
     /** A muted fact as the M extra line. */
     private fun factLine(text: String?): ((Float, Float, Float) -> Unit)? =
@@ -414,7 +444,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
                     k.value(Fmt.int(it), "kcal", p + 86f, h - p - 24f, 18f, 12f)
                 }
                 val hr = s.workoutHr(wk)
-                val sub = buildList { wk.avgHr?.let { add("Avg $it bpm") }; hr.maxOrNull()?.let { add("max ${n0(it)}") } }.joinToString(" · ")
+                val sub = buildList { wk.avgHr?.let { add("Avg HR $it") }; hr.maxOrNull()?.let { add("max ${n0(it)}") } }.joinToString(" · ")
                 if (sub.isNotEmpty()) k.text(k.fit(sub, lw, 12f), p, h - p - 3f, 12f, t.muted)
                 val cx = p + lw + 8f; val cw = w - cx - p - 26f; val ch = h - p - 34f - p - 16f
                 if (hr.size >= 2 && cw > 40f) {
@@ -473,17 +503,19 @@ class Tiles(private val k: Ink, private val s: TileSource) {
         val range = if (v14.size >= 2) "${n0(v14.min())}–${n0(v14.max())}" else null
         val lo = (v14.minOrNull() ?: r.value) - 2.0
         when (size) {
-            TileSize.S -> TileArt.small(k, w, h, Glyph.Drop, Hue.spo2, n1(r.value), "%", "Blood oxygen")
+            TileSize.S -> TileArt.small(k, w, h, Glyph.Drop, Hue.spo2, n1(r.value), "%", "Blood oxygen", short = "Blood O₂")
             TileSize.M -> {
                 val p = 14f
                 k.labelRow(p, p - 1f, w - p, Hue.spo2, "Blood oxygen", null)   // QA 01.6: colour dot like every tile
                 k.value(n0(r.value), "%", p, h - 29f, 26f, 13f)
                 k.text(nightMeta(r.day), p, h - 12f, 11.5f, t.muted)
-                val cw = min(110f, w * 0.42f)
+                // the nights start below the 18 dp title row (never over "Blood oxygen"); wider pitch for the day letters
+                val vMetaW = max(k.valueWidth(n0(r.value), "%", 26f, 13f), k.measure(nightMeta(r.day), 11.5f))
+                val cw = min(min(110f, w * 0.5f), max(w * 0.42f, w - 2 * p - vMetaW - 8f)); val nh = h - 2 * p - 38f
                 val n7 = s.rolling7("spo2")
-                nightDots(n7, w - p - cw, p + 4f, cw, h - 2 * p - 22f, lo)
+                if (nh >= 10f) nightDots(n7, w - p - cw, p + 20f, cw, nh, lo)
                 val slot = cw / 7f
-                s.rollingLetters.forEachIndexed { i, l -> k.text(l, w - p - cw + slot * i + slot / 2f, h - p + 2f, 10f, t.muted, 600, Paint.Align.CENTER) }
+                if (nh >= 10f) s.rollingLetters.forEachIndexed { i, l -> k.text(l, w - p - cw + slot * i + slot / 2f, h - p + 2f, 10f, t.muted, 600, Paint.Align.CENTER) }
             }
             else -> {
                 val p = 16f
@@ -516,7 +548,7 @@ class Tiles(private val k: Ink, private val s: TileSource) {
         val noStages = deep + rem + light == 0 && unspec > 0
         val span = run {
             val st = pr["start"]?.toLong(); val en = pr["end"]?.toLong()
-            if (st != null && en != null && st > 0 && en > 0) "${Fmt.hm(st)} – ${Fmt.hm(en)}" else null
+            if (st != null && en != null && st > 0 && en > 0) "${Fmt.hm(st)}–${Fmt.hm(en)}" else null
         }
         val c = Hue.sleep
         val deepTxt = Fmt.duration(deep)

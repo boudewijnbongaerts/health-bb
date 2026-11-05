@@ -306,6 +306,8 @@ object Sync {
                 mutex.withLock {
                     Cache.get(app).clearAll() // daily, hourly, hr_day, workout, rec_index, rec_count AND meta (tokens, progress, steps)
                     SyncLog.i("rebuild: cache, change tokens and history progress wiped")
+                    // Google Health API values live in gh_daily (kept): back into daily right away, no network
+                    Cache.get(app).mirrorGh().let { if (it > 0) SyncLog.i("rebuild: $it Google Health API days restored") }
                 }
                 bump()
             } catch (e: CancellationException) {
@@ -1101,6 +1103,9 @@ object Sync {
                 if (!v.isNaN() && !v.isInfinite()) readings += RawReading(d, pkg, t, v)
             }
         }
+        // VO2 max read directly from the Google Health API (own table, ranks first): part of the same per-day choice,
+        // so this replace never drops those days
+        if (metric == M.VO2) cache.ghDaily(metric, from, to).forEach { readings += RawReading(it.day, GhApi.SOURCE, it.time, it.value) }
         val picks = SyncLogic.pickPerDay(readings.filter { SyncLogic.within(it.day, from, to) }, { Sources.rank(kind, it) }, lastOfDay)
         val rows = picks.map { DailyRow(metric, it.day, it.value, it.time, it.pkg) }
         cache.replaceDaily(listOf(metric), from, to, rows)

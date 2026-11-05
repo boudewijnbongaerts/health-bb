@@ -45,7 +45,9 @@ enum class ClockFont(
  * so the launcher's TextClock (includeFontPadding = false: its box is ascent + descent) lands where the layout expects.
  * [digitTop] = top of the digit "0" above the baseline; [width] = advance of the sample string.
  */
-data class FontEm(val ascent: Float, val descent: Float, val digitTop: Float, val width: Float) {
+data class FontEm(val ascent: Float, val descent: Float, val digitTop: Float, val width: Float,
+                  /** Left side bearing of "0" (ink left of the pen start); the wide layout indents the date by it. */
+                  val lsb: Float = 0f) {
     val lineH: Float get() = ascent + descent
     companion object {
         /** Roboto-like fallback when measuring fails (Roboto: ascent 0.928, descent 0.244, cap 0.711). */

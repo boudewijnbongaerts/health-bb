@@ -80,7 +80,7 @@ fun InfoSheet(info: InfoText, onDismiss: () -> Unit) {
 }
 
 /** Card title: 14.5 sp bold (design6 kit6.card). */
-val CardTitle = androidx.compose.ui.text.TextStyle(fontSize = androidx.compose.ui.unit.TextUnit(14.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+val CardTitle: androidx.compose.ui.text.TextStyle get() = androidx.compose.ui.text.TextStyle(fontFamily = com.boudhealth.ui.theme.AppFont.family, fontSize = androidx.compose.ui.unit.TextUnit(14.5f, androidx.compose.ui.unit.TextUnitType.Sp),
     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, lineHeight = androidx.compose.ui.unit.TextUnit(20f, androidx.compose.ui.unit.TextUnitType.Sp))
 
 // =====================================================================================================================

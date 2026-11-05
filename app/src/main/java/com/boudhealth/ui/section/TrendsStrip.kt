@@ -102,13 +102,13 @@ fun TrendsStrip(model: TrendsModel, cover: Boolean, modifier: Modifier = Modifie
     HBCard(modifier.fillMaxWidth(), padding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
         // header: "Trends" 13/600 muted at (18, text line 27); basis right-aligned 12 (cover 11.5) muted, shrinking to 10
         Canvas(Modifier.fillMaxWidth().height(42.dp).semantics { contentDescription = listOfNotNull(R3Texts.TRENDS, model.basis).joinToString(", ") }) {
-            val title = measurer.measure(R3Texts.TRENDS, TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted))
+            val title = measurer.measure(R3Texts.TRENDS, R3Base.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted))
             drawText(title, topLeft = Offset(18.dp.toPx(), 27.dp.toPx() - title.firstBaseline))
             val b = model.basis ?: return@Canvas
             var fs = if (cover) 11.5f else 12f
             val maxW = size.width - 110.dp.toPx()
-            var t = measurer.measure(b, TextStyle(fontSize = fs.sp, color = hb.colors.muted), maxLines = 1)
-            while (t.size.width > maxW && fs > 10f) { fs -= 0.5f; t = measurer.measure(b, TextStyle(fontSize = fs.sp, color = hb.colors.muted), maxLines = 1) }
+            var t = measurer.measure(b, R3Base.copy(fontSize = fs.sp, color = hb.colors.muted), maxLines = 1)
+            while (t.size.width > maxW && fs > 10f) { fs -= 0.5f; t = measurer.measure(b, R3Base.copy(fontSize = fs.sp, color = hb.colors.muted), maxLines = 1) }
             drawText(t, topLeft = Offset(size.width - 18.dp.toPx() - t.size.width, 27.dp.toPx() - t.firstBaseline))
         }
         val tiles = model.tiles
@@ -141,23 +141,23 @@ fun TrendTile(t: TrendTileModel, cover: Boolean, modifier: Modifier = Modifier) 
             val w = size.width; val h = size.height
             // label 11.5/600 muted (cover 11), up to 2 lines with ellipsis, baselines y+20 / y+34
             val lfs = if (cover) 11f else 11.5f
-            val lab = measurer.measure(t.label, TextStyle(fontSize = lfs.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, lineHeight = 14.sp),
+            val lab = measurer.measure(t.label, R3Base.copy(fontSize = lfs.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, lineHeight = 14.sp),
                 overflow = TextOverflow.Ellipsis, maxLines = 2, constraints = Constraints(maxWidth = (w - 24.dp.toPx()).toInt().coerceAtLeast(1)))
             drawText(lab, topLeft = Offset(12.dp.toPx(), 20.dp.toPx() - lab.firstBaseline))
             // value 17/700 (cover 16) at x+38, shrinking to 13 sp to fit; suffix 11.5/600 muted after it
             val cy = 56.dp.toPx()
             var vfs = if (cover) 16f else 17f
             val room = w - 46.dp.toPx()
-            fun vStyle(f: Float) = TextStyle(fontSize = f.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum")
+            fun vStyle(f: Float) = R3Base.copy(fontSize = f.sp, fontWeight = FontWeight.Bold, color = hb.colors.text, fontFeatureSettings = "tnum")
             var vt = measurer.measure(t.value, vStyle(vfs), maxLines = 1)
             while (vt.size.width > room && vfs > 13f) { vfs -= 0.5f; vt = measurer.measure(t.value, vStyle(vfs), maxLines = 1) }
             val vx = 38.dp.toPx()
             drawText(vt, topLeft = Offset(vx, cy - vt.size.height / 2f))
             var viz = t.visual
             t.suffix?.let { suf ->
-                val st = measurer.measure(suf, TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted), maxLines = 1)
+                val st = measurer.measure(suf, R3Base.copy(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted), maxLines = 1)
                 if (vx + vt.size.width + 5.dp.toPx() + st.size.width <= w - 8.dp.toPx()) {
-                    drawText(st, topLeft = Offset(vx + vt.size.width + 5.dp.toPx(), cy + 0.5.dp.toPx() - st.size.height / 2f))
+                    drawText(st, topLeft = Offset(vx + vt.size.width + 5.dp.toPx(), (cy - vt.size.height / 2f) + vt.firstBaseline - st.firstBaseline))   // on the value's baseline
                 } else viz = MicroVisual.Caption(suf, viz)
             }
             viz?.let { drawMicro(it, 12.dp.toPx(), h - 22.dp.toPx(), w - 24.dp.toPx(), 10.dp.toPx(), measurer, hb) }
@@ -269,7 +269,7 @@ internal fun DrawScope.drawMicro(v: MicroVisual, x: Float, y: Float, w: Float, h
             rr(X(v.lo), y + 2 * dp, max(6 * dp, X(v.hi) - X(v.lo)), 6 * dp, 3 * dp, cc(v.color))
         }
         is MicroVisual.Caption -> {
-            val t = measurer.measure(v.text, TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted), maxLines = 1,
+            val t = measurer.measure(v.text, R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted), maxLines = 1,
                 overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = w.toInt().coerceAtLeast(1)))
             drawText(t, topLeft = Offset(x, y + 5 * dp - t.size.height / 2f))
             val rest = w - t.size.width - 10 * dp
@@ -277,7 +277,7 @@ internal fun DrawScope.drawMicro(v: MicroVisual, x: Float, y: Float, w: Float, h
         }
         is MicroVisual.Note -> {
             val c = when (v.tone) { Tone.BAD -> hb.colors.bad; Tone.GOOD -> hb.colors.good; Tone.NEUTRAL -> hb.colors.muted }
-            val t = measurer.measure(v.text, TextStyle(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = c), maxLines = 1,
+            val t = measurer.measure(v.text, R3Base.copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = c), maxLines = 1,
                 overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = w.toInt().coerceAtLeast(1)))
             drawText(t, topLeft = Offset(x, y + 5 * dp - t.size.height / 2f))
         }

@@ -81,7 +81,7 @@ fun GoalSheet(metricId: String, onDismiss: () -> Unit) {
         BigStepper(v, { v = it; touched = true }, step = spec.step, range = spec.range, decimals = spec.decimals, unit = metricUnit(m))
         Spacer(Modifier.height(20.dp))
         SheetActions {
-            HBButton("Save goal", { save(v) }, fullWidth = true)
+            HBButton("Save", { save(v) }, fullWidth = true)
             if (nullableGoalSet) HBButton(if (body) "Remove target" else "Remove goal", { save(null) }, kind = ButtonKind.Text, fullWidth = true)
             else if (!spec.removable && current != spec.default) HBButton("Reset to ${Fmt.num(spec.default)}", { save(spec.default) }, kind = ButtonKind.Text, fullWidth = true)
         }

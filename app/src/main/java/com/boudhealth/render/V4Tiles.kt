@@ -170,8 +170,15 @@ internal class V4Tiles(private val k: Ink, private val s: TileSource) {
             TileSize.L -> {
                 val p = 16f; val d = 60f
                 k.text(label, p, p - 1f + 14f, 13.5f, lc, 600)
-                k.value(k.fit(compactOrNum(value), w - 2 * p - 64f, 32f, 700), null, p, 64.8f, 32f)
-                k.text(k.fit(fitUnit(ofText, w - 2 * p - 64f, 12f), w - 2 * p - 64f, 12f), p, 85f, 12f, t.muted)
+                // never "3,…": the number steps down (32 → 14 sp) to fit left of the ring
+                val vs = compactOrNum(value)
+                var fs = 32f
+                while (k.measure(vs, fs, 700) > w - 2 * p - 64f && fs > 14f) fs -= 1f
+                k.value(k.fit(vs, w - 2 * p - 64f, fs, 700), null, p, 64.8f, fs)
+                // "of 6,000" steps down (12 → 10 sp) before the goal number would be cut
+                val ofL = fitUnit(ofText, w - 2 * p - 64f, 12f)
+                val ofs = if (k.measure(ofL, 12f) <= w - 2 * p - 64f) 12f else max(10f, 12f * (w - 2 * p - 64f) / k.measure(ofL, 12f))
+                k.text(k.fit(ofL, w - 2 * p - 64f, ofs), p, 85f, ofs, t.muted)
                 k.singleRing(w - p - d, p, d, p0, c, 10f)
                 k.glyph(glyph, w - p - d + 20f, p + 20f, 20f, lc, 2.4f)
                 chart(p, p + 86f, w - 2 * p, h - p - 86f - p)
@@ -183,10 +190,16 @@ internal class V4Tiles(private val k: Ink, private val s: TileSource) {
                 k.glyph(glyph, p + (d - gs) / 2f, (h - gs) / 2f, gs, lc, 2.2f)
                 k.labelRow(tx, p - 1f, w - p, null, label, null, 14f, lc)
                 val vw = k.value(compactOrNum(value), null, tx, 72.4f, 36f)
-                val gw = k.text(k.fit(fitUnit(" / $goalStr $unit", w - p - tx - vw - 50f, 13f, 500), w - p - tx - vw - 50f, 13f, 500), tx + vw, 72.4f, 13f, t.muted, 500)
+                // " / 6,000 steps" → " / 6,000", or nothing: never a lone " …"; the lap chip's 50 dp are used only
+                // when the goal would not fit otherwise and no chip shows
+                val chip = p0 > 1f && !heart
+                var gRoom = w - p - tx - vw - 50f
+                if (!chip && k.measure(fitUnit(" / $goalStr $unit", gRoom, 13f, 500), 13f, 500) > gRoom) gRoom += 50f
+                val gTxt = fitUnit(" / $goalStr $unit", gRoom, 13f, 500)
+                val gw = if (k.measure(gTxt, 13f, 500) <= gRoom) k.text(gTxt, tx + vw, 72.4f, 13f, t.muted, 500) else 0f
                 if (p0 > 1f && !heart) lapChip(i, p0, tx + vw + gw + 8f, 72.4f - 16f)
                 k.text(k.fit(ctx, w - p - tx, 12.5f), tx, 99f, 12.5f, t.muted)
-                chart(tx, p + 92f, w - tx - p, h - p - 92f - p)
+                if (h - p - 92f - p >= 24f) chart(tx, p + 92f, w - tx - p, h - p - 92f - p)   // short XL: no squeezed chart over the text
             }
         }
     }
@@ -199,12 +212,14 @@ internal class V4Tiles(private val k: Ink, private val s: TileSource) {
         if (total == null) return emptyTile(size, "Calories burned", c0, Glyph.Flame, "No data", w, h)
         val k7 = s.kcal7
         when (size) {
-            TileSize.S -> TileArt.small(k, w, h, Glyph.Flame, c0, Fmt.int(total), null, "kcal burned")
+            TileSize.S -> TileArt.small(k, w, h, Glyph.Flame, c0, Fmt.int(total), null, "kcal burned", short = "Calories")
             TileSize.M -> {
                 val p = 14f
                 k.labelRow(p, p - 1f, w - p, c0, "Calories burned", null)
-                k.value(Fmt.num(total), "kcal", p, h - 15.5f, 24f)
-                if (k7.any { it != null }) k.mini7(k7, w - p - 74f, p + 24f, 74f, h - 2 * p - 24f, c0, barW = 7f, gap = 3f)
+                val valW = k.value(Fmt.num(total), "kcal", p, h - 15.5f, 24f)
+                // the bars start right of the value + unit (never under "kcal")
+                val bx = max(w - p - 74f, p + valW + 6f)
+                if (k7.any { it != null } && w - p - bx > 8f) k.mini7(k7, bx, p + 24f, w - p - bx, h - 2 * p - 24f, c0, barW = 7f, gap = 3f)
             }
             else -> {
                 val xl = size == TileSize.XL
@@ -246,12 +261,14 @@ internal class V4Tiles(private val k: Ink, private val s: TileSource) {
             return
         }
         val m = size == TileSize.M
-        val p = if (m) 12f else 16f
-        k.labelRow(p, p - 1f, w - p, Hue.cardio, "Recent workouts", null)
+        // M: the same title baseline as the other M tiles (row top 13) and their 14 dp inset where the title fits whole;
+        // the rows keep their 12 dp bottom pad
+        val p = if (!m) 16f else if (k.measure("Recent workouts", 13f, 600) <= w - 2 * 14f - 14f + 6f) 14f else 12f
+        k.labelRow(p, if (m) 13f else p - 1f, w - p, Hue.cardio, "Recent workouts", null)
         val gd = if (m) 18f else 26f
-        val top0 = p + if (m) 22f else 28f
-        val rowH = if (m) (h - p - top0) / 2f else max(gd + 8f, min(40f, (h - p - top0) / 4f))
-        val n = ((h - p - top0) / rowH).toInt().coerceIn(1, if (m) 2 else 6)
+        val top0 = if (m) 36f else p + 28f
+        val rowH = if (m) (h - 12f - top0).let { if (it / 2f >= 10f) it / 2f else it } else max(gd + 8f, min(40f, (h - p - top0) / 4f))
+        val n = ((h - (if (m) 12f else p) - top0) / rowH).toInt().coerceIn(1, if (m) 2 else 6)
         ws.take(n).forEachIndexed { i, wk ->
             val ry = top0 + i * rowH
             k.glyphCircle(wGlyph(wk), wCol(wk), p, ry + (rowH - gd) / 2f, gd, if (m) 11f else 15f)
@@ -263,7 +280,10 @@ internal class V4Tiles(private val k: Ink, private val s: TileSource) {
             val rw = k.text(right, w - p, base, 11.5f, t.muted, 400, Paint.Align.RIGHT)
             // v6 H5: XL shows the full workout name as delivered
             val name = if (size == TileSize.XL) wk.title?.takeIf { it.isNotBlank() } ?: V2Models.workoutName(wk) else V2Models.workoutName(wk)
-            k.text(k.fit(name, w - 2 * p - gd - 8f - rw - 8f, 12.5f, 600), p + gd + 8f, base, 12.5f, t.text, 600)
+            // the name steps down (12.5 → 11.5 sp) before it is cut
+            val nRoom = w - 2 * p - gd - 8f - rw - 8f
+            val nfs = if (k.measure(name, 12.5f, 600) <= nRoom) 12.5f else 11.5f
+            k.text(k.fit(name, nRoom, nfs, 600), p + gd + 8f, base, nfs, t.text, 600)
         }
     }
 }

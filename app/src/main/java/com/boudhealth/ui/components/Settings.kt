@@ -84,7 +84,7 @@ fun SettingsGroup(label: String?, modifier: Modifier = Modifier, build: Settings
         }
         Column(Modifier.fillMaxWidth().background(hb.colors.card, HbShapes.group)) {
             rows.forEachIndexed { i, r ->
-                if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(hb.colors.surface))
+                if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(hb.colors.grid))
                 r()
             }
         }
@@ -103,6 +103,10 @@ fun SettingsRow(
     dot: Color? = null,
     leadingGlyph: Glyph? = null,
     onClick: (() -> Unit)? = null,
+    /** R5 #49: a second subtitle line (1 line); the subtitle then keeps to 1 line with an ellipsis. */
+    subtitleLine2: String? = null,
+    /** R6: subtitle colour (e.g. `bad` for a failed sync); null = muted. */
+    subtitleColor: Color? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val hb = LocalHB.current
@@ -118,7 +122,8 @@ fun SettingsRow(
                 if (dot != null) { Dot(dot); Spacer(Modifier.width(8.dp)) }
                 Text(title, style = hb.type.bodyMedium, color = hb.colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (subtitle != null) Text(subtitle, style = hb.type.bodyXS.copy(fontSize = 12.5.sp), color = hb.colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, style = hb.type.bodyXS.copy(fontSize = 12.5.sp), color = subtitleColor ?: hb.colors.muted, maxLines = if (subtitleLine2 != null) 1 else 2, overflow = TextOverflow.Ellipsis)
+            if (subtitleLine2 != null) Text(subtitleLine2, style = hb.type.bodyXS.copy(fontSize = 12.5.sp), color = hb.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (trailing != null) { Spacer(Modifier.width(12.dp)); trailing() }
     }
@@ -126,8 +131,8 @@ fun SettingsRow(
 
 /** Row with an [HBSwitch]. The whole row toggles. */
 @Composable
-fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, subtitle: String? = null, enabled: Boolean = true) {
-    SettingsRow(title, modifier.alpha(if (enabled) 1f else 0.38f), subtitle, onClick = if (enabled) ({ onCheckedChange(!checked) }) else null) {
+fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, subtitle: String? = null, enabled: Boolean = true, leadingGlyph: Glyph? = null) {
+    SettingsRow(title, modifier.alpha(if (enabled) 1f else 0.38f), subtitle, leadingGlyph = leadingGlyph, onClick = if (enabled) ({ onCheckedChange(!checked) }) else null) {
         HBSwitch(checked, onCheckedChange, enabled = enabled)
     }
 }
@@ -145,27 +150,6 @@ fun ChevronRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier
     }
 }
 
-/** Row with a [Stepper] at the right. */
-@Composable
-fun StepperRow(
-    title: String,
-    value: Double,
-    onValueChange: (Double) -> Unit,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-    step: Double = 1.0,
-    range: ClosedFloatingPointRange<Double> = 0.0..Double.MAX_VALUE,
-    decimals: Int = 0,
-    unit: String? = null,
-    dot: Color? = null,
-    onValueClick: (() -> Unit)? = null,
-    valueText: ((Double) -> String)? = null,
-) {
-    SettingsRow(title, modifier, subtitle, dot) {
-        Stepper(value, onValueChange, step = step, range = range, decimals = decimals, unit = unit, onValueClick = onValueClick, valueText = valueText)
-    }
-}
-
 /** Title (+ subtitle) left, small segmented control right on the same row (QA 22.3: "Theme [System Light Dark]"). */
 @Composable
 fun <T> SegmentRow(
@@ -176,15 +160,17 @@ fun <T> SegmentRow(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     label: (T) -> String = { it.toString() },
+    leadingGlyph: Glyph? = null,
 ) {
     val hb = LocalHB.current
     Row(modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (leadingGlyph != null) { GlyphIcon(leadingGlyph, size = 22.dp, color = hb.colors.text); Spacer(Modifier.width(14.dp)) }
         Column(Modifier.weight(1f)) {
             Text(title, style = hb.type.bodyMedium, color = hb.colors.text)
             if (subtitle != null) Text(subtitle, style = hb.type.bodyXS.copy(fontSize = 12.5.sp), color = hb.colors.muted)
         }
         Spacer(Modifier.width(12.dp))
-        SegmentedRange(options, selected, onSelect, modifier = Modifier.width((options.size * 76).dp), label = label, size = SegmentSize.Small, track = hb.colors.surface)
+        SegmentedRange(options, selected, onSelect, modifier = Modifier.width((options.size * 76).dp), label = label, size = SegmentSize.Small, track = hb.colors.tile)
     }
 }
 

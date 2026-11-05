@@ -108,7 +108,8 @@ private fun PeriodNav(scope: SectionScope, dataStart: LocalDate, today: LocalDat
             enabled = back, tint = if (back) hb.colors.text else hb.colors.muted.copy(alpha = 0.4f))
         Text(
             periodLabel(scope.period), style = hb.type.titleS.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = hb.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 10.dp).plainClickable {
+            // weight(fill = false): the label ellipsizes before the selected-day chip is squeezed on narrow covers
+            modifier = Modifier.weight(1f, fill = false).padding(horizontal = 10.dp).plainClickable {
                 // label tap → current period of this unit
                 onScope(SectionScope(SectionPeriod.current(scope.unit, today, dataStart), null, true))
             }.semantics { contentDescription = "Period ${periodLabel(scope.period)}, tap for the current one" },
@@ -141,14 +142,16 @@ fun SelectedDayChip(day: LocalDate, onClear: () -> Unit) {
 internal fun UnitChips(labels: List<String>, selected: Int, modifier: Modifier, onSelect: (Int) -> Unit) {
     val hb = LocalHB.current
     // design6 kit6.seg: 300 × 40 (cover full width × 38), selected pill inset 4, labels 13.5 bold
-    Row(modifier.height(40.dp).background(hb.colors.tile, RoundedCornerShape(20.dp)).padding(4.dp)) {
+    // the whole 40 dp height is the tap target; the pill keeps its 4 dp inset (32 high)
+    Row(modifier.height(40.dp).background(hb.colors.tile, RoundedCornerShape(20.dp)).padding(horizontal = 4.dp)) {
         labels.forEachIndexed { i, label ->
             val sel = i == selected
             val bg by animateColorAsState(if (sel) hb.colors.accent else Color.Transparent, tween(160), label = "unit")
             Box(
-                Modifier.weight(1f).height(32.dp).background(bg, RoundedCornerShape(16.dp))
+                Modifier.weight(1f).height(40.dp)
                     .semantics { role = Role.Tab; this.selected = sel; contentDescription = label }
-                    .plainClickable { onSelect(i) },
+                    .plainClickable { onSelect(i) }
+                    .padding(vertical = 4.dp).background(bg, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(label, fontSize = 13.5.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if (sel) hb.colors.onAccent else hb.colors.muted, maxLines = 1)

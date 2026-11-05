@@ -203,6 +203,46 @@ suspend fun loadCoverage(context: Context): Map<String, Set<LocalDate>> = withCo
     }.getOrDefault(emptyMap())
 }
 
+/** Cached daily metric(s) behind each Data check row (same as [loadCoverage]); Height also reads the typed height. */
+private val USED_METRICS: Map<String, List<String>> = mapOf(
+    "Steps" to listOf(M.STEPS),
+    "TotalCaloriesBurned" to listOf(M.KCAL),
+    "ActiveCaloriesBurned" to listOf(M.KCAL),
+    "HeartRate" to listOf(M.HR_AVG),
+    "RestingHeartRate" to listOf(M.RHR),
+    "HeartRateVariabilityRmssd" to listOf(M.HRV),
+    "Vo2Max" to listOf(M.VO2),
+    "OxygenSaturation" to listOf(M.SPO2),
+    "RespiratoryRate" to listOf(M.RESP),
+    "Weight" to listOf(M.WEIGHT),
+    "BodyFat" to listOf(M.FAT_PCT),
+    "LeanBodyMass" to listOf(M.LEAN_KG),
+    "Height" to listOf(M.HEIGHT, M.HEIGHT_MANUAL),
+    "SleepSession" to listOf(M.SLEEP_MIN),
+    "Waist" to listOf(M.WAIST),
+)
+
+/**
+ * R6 #3: per Data check type, the readable source(s) Health BB actually used in the last 30 days (the cache's per-day
+ * choice; workouts from the merged sessions), most used first. Sparse / body types with nothing in the 30 days fall
+ * back to the source of their newest value. Cache only, no Health Connect calls.
+ */
+fun usedSources(cache: com.boudhealth.data.CacheReads, today: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Map<String, List<String>> {
+    val from = today.minusDays(29)
+    fun ms(d: LocalDate) = d.atStartOfDay(zone).toInstant().toEpochMilli()
+    val out = HashMap<String, List<String>>()
+    for ((type, metrics) in USED_METRICS) {
+        val info = typeInfo(type)
+        val recent = UsedSources.ofDays(metrics.flatMap { cache.daily(it, from, today) })
+        val newest = if (recent.isEmpty()) metrics.firstNotNullOfOrNull { cache.latest(it, today) } else null
+        out[type] = UsedSources.withFallback(recent, info.sparse || info.body, newest).mapNotNull { shortSource(com.boudhealth.data.SourceNames.label(it)) }.distinct()
+    }
+    val recentWorkouts = UsedSources.ofWorkouts(cache.workouts(ms(from), ms(today.plusDays(1))))
+    out["ExerciseSession"] = recentWorkouts.ifEmpty { UsedSources.ofNewestWorkout(cache.workouts(ms(today.minusYears(1)), ms(today.plusDays(1)))) }
+        .mapNotNull { shortSource(com.boudhealth.data.SourceNames.label(it)) }.distinct()
+    return out
+}
+
 /** A stale type: data used to arrive, but nothing new for a week. Returns the sentence or null. */
 fun staleSentence(t: TypeStats, now: Long = System.currentTimeMillis()): String? {
     if (!t.permissionGranted) return null

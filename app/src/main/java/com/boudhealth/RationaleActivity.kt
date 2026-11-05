@@ -42,7 +42,9 @@ class RationaleActivity : ComponentActivity() {
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Everything stays on this phone. No internet permission, no analytics, no third parties.",
+                        // R5 #37 (owner-approved text): the app has INTERNET for the Google Health API (VO₂ max)
+                        "Your data stays on this phone. No analytics, no third parties. " +
+                            "When you connect Google Health, Health BB also reads your VO₂ max from your Google account.",
                         style = hb.type.body, color = hb.colors.muted,
                     )
                     Spacer(Modifier.height(24.dp))

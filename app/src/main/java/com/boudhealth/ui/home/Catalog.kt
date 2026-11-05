@@ -76,7 +76,7 @@ internal fun CatalogSheet(
         // from reaching the sheet (SheetScrollBarrier). The sheet still closes by its handle, the scrim or Close.
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 14.dp)) {
-                Text("Add a tile", style = hb.type.titleL, color = hb.colors.text)
+                Text("Add tile", style = hb.type.titleL, color = hb.colors.text)
                 Spacer(Modifier.width(10.dp))
                 Text("${TileInfos.all.size} tiles", style = hb.type.bodyS, color = hb.colors.muted, modifier = Modifier.weight(1f))
                 IconCircleButton(Glyph.Close, onDismiss, contentDescription = "Close", background = hb.colors.sheetTile)

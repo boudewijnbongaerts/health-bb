@@ -184,7 +184,7 @@ fun niceTicks(lo: Double, hi: Double, count: Int = 3): List<Double> {
 
 private fun minutes(t: LocalDateTime, t0: LocalDateTime): Float = ChronoUnit.SECONDS.between(t0, t) / 60f
 
-private val loc: Locale get() = Locale.getDefault()
+private val loc: Locale get() = Locale.ENGLISH
 
 /** Default x labels for a time span (≤ ~6). */
 fun autoXLabels(x0: LocalDateTime, x1: LocalDateTime): List<Pair<LocalDateTime, String>> {
@@ -576,171 +576,6 @@ private fun linePath(pts: List<Offset>, smooth: Boolean): Path {
 // =====================================================================================================================
 // Bar chart
 // =====================================================================================================================
-
-/**
- * Bars: width min(24, slot·0.5), fully rounded. With a [goal]: met = vertical c0 → c1 gradient, below = c0 at 32 % / 42 %;
- * without a goal every bar gets the gradient. Stacked bars ([Bar.segments]) use 2 dp gaps clipped to the rounded bar.
- * Goal line + "Goal 10k" pill. X labels = [Bar.label] (day letters) with the ink today pill. Scrub dims the others to 45 %.
- *
- * @param colors (c0, c1), e.g. palette.steps or (Cat.heart, Cat.heart)
- * @param track draw a `tile` pill track behind every slot (workouts chart); future slots at 50 %
- * @param showTotals micro totals above bars (hidden on the scrubbed bar)
- * @param onScrub index of the scrubbed bar, null on release
- */
-@Composable
-fun BarChart(
-    bars: List<Bar>,
-    colors: Pair<Color, Color>,
-    modifier: Modifier = Modifier,
-    height: Dp = 200.dp,
-    goal: Double? = null,
-    goalLabel: String? = goal?.let { "Goal ${Fmt.compact(it)}" },
-    yMax: Double? = null,
-    yFormat: (Double) -> String = { Fmt.compact(it) },
-    showYLabels: Boolean = true,
-    gridLines: Boolean = true,
-    showTotals: Boolean = false,
-    totalFormat: (Double) -> String = { Fmt.compact(it) },
-    track: Boolean = false,
-    labelEvery: Int = 1,
-    unit: String = "",
-    decimals: Int = 0,
-    tooltip: ((Int, Bar) -> ChartTooltip)? = null,
-    scrubEnabled: Boolean = true,
-    onScrub: ((Int?) -> Unit)? = null,
-    onSwipe: ((Int) -> Unit)? = null,
-    animateKey: Any? = bars,
-    compact: Boolean = false,
-    topPadding: Dp = if (compact) 2.dp else 48.dp,
-) {
-    val hb = LocalHB.current
-    val measurer = rememberTextMeasurer()
-    val haptics = rememberHaptics()
-    val grow = remember { Animatable(if (hb.reducedMotion) 1f else 0f) }
-    LaunchedEffect(animateKey) {
-        if (hb.reducedMotion) grow.snapTo(1f) else { grow.snapTo(0f); grow.animateTo(1f, tween(450, easing = EmphasizedDecelerate)) }
-    }
-    var scrubbed by remember { mutableStateOf<Int?>(null) }
-    val onScrubState by rememberUpdatedState(onScrub)
-    val onSwipeState by rememberUpdatedState(onSwipe)
-    val interactive = !compact && scrubEnabled
-    val density = LocalDensity.current
-    val yGutterPx = with(density) { if (showYLabels && !compact) 32.dp.toPx() else 0f }
-    val barCount by rememberUpdatedState(bars.size)
-
-    val totals = bars.map { b -> if (b.segments.isNotEmpty()) b.segments.sumOf { it.first } else b.value }
-    val maxV = max(totals.maxOrNull() ?: 0.0, goal ?: 0.0)
-    val ticks = niceTicks(0.0, if (maxV <= 0) 1.0 else maxV * 1.05)
-    val top0 = yMax ?: ticks.last()
-    val (c0, c1) = colors
-
-    Canvas(
-        modifier.fillMaxWidth().height(height).chartGestures(
-            enabled = interactive || (onSwipe != null && !compact),
-            swipeThresholdPx = with(density) { 56.dp.toPx() },
-            hasSwipe = onSwipe != null,
-            onSwipe = { d -> onSwipeState?.invoke(d) },
-        ) { x, width ->
-            val n = barCount
-            val next: Int? = if (x == null || !interactive || n == 0) null else {
-                val slotW = (width - yGutterPx) / n
-                (x / slotW).toInt().coerceIn(0, n - 1)
-            }
-            if (next != scrubbed) {
-                scrubbed = next
-                if (next != null) haptics.tick()
-                onScrubState?.invoke(next)
-            }
-        },
-    ) {
-        val n = max(1, bars.size)
-        val right = if (showYLabels && !compact) size.width - 32.dp.toPx() else size.width
-        val top = topPadding.toPx()
-        val bottom = size.height - if (compact) 0f else 32.dp.toPx()
-        val slot = right / n
-        val bw = min(24.dp.toPx(), slot * 0.5f)
-        fun yOf(v: Double) = bottom - (v / top0).toFloat().coerceIn(0f, 1.05f) * (bottom - top)
-        fun cx(i: Int) = slot * i + slot / 2f
-
-        if (gridLines && !compact) {
-            ticks.filter { it <= top0 }.forEach { v ->
-                val y = yOf(v)
-                drawLine(hb.colors.grid, Offset(0f, y), Offset(right, y), 1.dp.toPx())
-                if (showYLabels) {
-                    val r = measurer.measure(yFormat(v), TextStyle(fontSize = 11.sp, color = hb.colors.muted, fontFeatureSettings = "tnum"))
-                    drawText(r, topLeft = Offset(size.width - r.size.width, y - r.size.height / 2f))
-                }
-            }
-        }
-
-        val sel: Int? = scrubbed?.takeIf { it in bars.indices }
-
-        bars.forEachIndexed { i, b ->
-            val x = cx(i) - bw / 2f
-            val alpha = if (sel == null || sel == i) 1f else 0.45f
-            if (track) {
-                drawRoundRect(hb.colors.tile.copy(alpha = if (b.future) 0.5f else 1f), Offset(x, top), Size(bw, bottom - top), CornerRadius(bw / 2))
-            }
-            val total = totals[i]
-            if (total > 0) {
-                val h = max(bw, (bottom - yOf(total)) * grow.value)
-                val rect = RoundRect(x, bottom - h, x + bw, bottom, CornerRadius(bw / 2))
-                if (b.segments.isNotEmpty()) {
-                    val clip = Path().apply { addRoundRect(rect) }
-                    clipPath(clip) {
-                        var yb = bottom
-                        val gap = 2.dp.toPx()
-                        val segs = b.segments.filter { it.first > 0 }
-                        segs.forEachIndexed { k, (v, col) ->
-                            val sh = (v / total).toFloat() * h
-                            val gapHere = if (k < segs.lastIndex) gap else 0f
-                            drawRect(col.copy(alpha = alpha), Offset(x, yb - sh), Size(bw, max(0f, sh - gapHere)))
-                            yb -= sh
-                        }
-                    }
-                } else {
-                    val met = goal == null || total >= goal
-                    val bar = Path().apply { addRoundRect(rect) }
-                    if (met) drawPath(bar, Brush.verticalGradient(listOf(c1.copy(alpha = alpha), c0.copy(alpha = alpha)), startY = bottom - h, endY = bottom))
-                    else { val bc = hb.belowGoal(c0); drawPath(bar, bc.copy(alpha = bc.alpha * alpha)) }
-                }
-                if (showTotals && sel != i && !compact) {
-                    val r = measurer.measure(totalFormat(total), TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, fontFeatureSettings = "tnum"))
-                    drawText(r, topLeft = Offset(cx(i) - r.size.width / 2f, bottom - h - 4.dp.toPx() - r.size.height))
-                }
-            }
-            // x label / today pill
-            if (!compact && (i % max(1, labelEvery) == 0 || b.today)) {
-                val ly = bottom + 20.dp.toPx()
-                if (b.today) {
-                    drawCircle(hb.colors.accent, 11.dp.toPx(), Offset(cx(i), ly - 4.dp.toPx()))
-                    val r = measurer.measure(b.label, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = hb.colors.onAccent))
-                    drawText(r, topLeft = Offset(cx(i) - r.size.width / 2f, ly - 4.dp.toPx() - r.size.height / 2f))
-                } else {
-                    val r = measurer.measure(b.label, TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, color = hb.colors.muted))
-                    drawText(r, topLeft = Offset(cx(i) - r.size.width / 2f, ly - 4.dp.toPx() - r.size.height / 2f))
-                }
-            }
-        }
-
-        // goal line
-        if (goal != null && goal <= top0) {
-            val y = yOf(goal)
-            drawLine(hb.colors.text.copy(alpha = 0.55f), Offset(0f, y), Offset(right, y), 1.5.dp.toPx(), cap = StrokeCap.Round,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
-            if (goalLabel != null && !compact) labelPill(measurer, hb, goalLabel, 0f, y - 6.dp.toPx(), hb.colors.text, false)
-        }
-
-        // tooltip
-        if (sel != null) {
-            val b = bars[sel]
-            val tt = tooltip?.invoke(sel, b) ?: ChartTooltip(Fmt.num(totals[sel], decimals), unit, DateTimeFormatter.ofPattern("EEE d MMM", loc).format(b.x))
-            val tb = drawTooltip(measurer, hb, tt, cx(sel), 0f)
-            val barTop = if (totals[sel] > 0) bottom - max(bw, bottom - yOf(totals[sel])) else bottom
-            if (barTop > tb) drawLine(hb.colors.accent.copy(alpha = 0.55f), Offset(cx(sel), tb), Offset(cx(sel), barTop), 1.5.dp.toPx())
-        }
-    }
-}
 
 // =====================================================================================================================
 // Time chart (v4 Q23): tap / scrub to a real reading with a persistent callout, pinch / double-tap zoom with level of
@@ -1546,14 +1381,23 @@ private fun DrawScope.drawTimeChart(
 
     // ---- min / max / latest of the visible range (hidden while a point is selected)
     if (showExtremes && state.selection == null && hasData && vis.last - vis.first + 1 >= 3 && reveal >= 0.999f) {
+        // R5 #29: on bucketed levels (weeks / months) a point is a mean, so High / Low / Latest show real readings:
+        // the bucket's highest / lowest reading and the last raw reading; the tag stays anchored at the bucket mark.
+        val bucketed = lv?.bucketed == true
+        fun hiOf(k: Int) = if (bucketed) pts[k].hi else pts[k].v
+        fun loOf(k: Int) = if (bucketed) pts[k].lo else pts[k].v
         var iMax = vis.first; var iMin = vis.first
-        for (k in vis) { if (pts[k].v > pts[iMax].v) iMax = k; if (pts[k].v < pts[iMin].v) iMin = k }
+        for (k in vis) { if (hiOf(k) > hiOf(iMax)) iMax = k; if (loOf(k) < loOf(iMin)) iMin = k }
         val iLast = vis.last
+        val lastValue = if (!bucketed) pts[iLast].v else {
+            val lp = pts[iLast]
+            state.levels.firstOrNull { !it.bucketed }?.points?.getOrNull(lp.ref + lp.n - 1)?.v ?: lp.v
+        }
         val placed = ArrayList<Rect>()
-        fun tag(k: Int, label: String, above: Boolean) {
+        fun tag(k: Int, label: String, above: Boolean, value: Double = pts[k].v) {
             val p = pts[k]
             val x = xOf(p.x); val y = yOf(p.v)
-            val r = measurer.measure("$label ${tagFormat(p.v)}", TAG_STYLE.copy(color = hb.colors.text))
+            val r = measurer.measure("$label ${tagFormat(value)}", TAG_STYLE.copy(color = hb.colors.text))
             val padH = 6.dp.toPx(); val hgt = r.size.height + 4.dp.toPx(); val wdt = r.size.width + padH * 2
             val bx = (x - wdt / 2f).coerceIn(left, max(left, right - wdt))
             var by = if (above) y - 8.dp.toPx() - hgt else y + 8.dp.toPx()
@@ -1569,12 +1413,21 @@ private fun DrawScope.drawTimeChart(
             drawRoundRect(hb.colors.tile.copy(alpha = 0.92f), Offset(bx, by), Size(wdt, hgt), CornerRadius(hgt / 2f))
             drawText(r, topLeft = Offset(bx + padH, by + 2.dp.toPx()))
         }
-        val lastIsMax = iLast == iMax; val lastIsMin = iLast == iMin
-        tag(iMax, if (lastIsMax) "Latest · high" else "High", above = true)
-        if (!bars) tag(iMin, if (lastIsMin) "Latest · low" else "Low", above = false)
-        if (!lastIsMax && !lastIsMin && !bars) {
-            val mid = (pts[iMax].v + pts[iMin].v) / 2.0
-            tag(iLast, "Latest", above = pts[iLast].v < mid)
+        if (bucketed) {
+            tag(iMax, "High", above = true, value = hiOf(iMax))
+            if (!bars) tag(iMin, "Low", above = false, value = loOf(iMin))
+            if (!bars && iLast != iMax && iLast != iMin) {
+                val mid = (pts[iMax].v + pts[iMin].v) / 2.0
+                tag(iLast, "Latest", above = pts[iLast].v < mid, value = lastValue)
+            }
+        } else {
+            val lastIsMax = iLast == iMax; val lastIsMin = iLast == iMin
+            tag(iMax, if (lastIsMax) "Latest · high" else "High", above = true)
+            if (!bars) tag(iMin, if (lastIsMin) "Latest · low" else "Low", above = false)
+            if (!lastIsMax && !lastIsMin && !bars) {
+                val mid = (pts[iMax].v + pts[iMin].v) / 2.0
+                tag(iLast, "Latest", above = pts[iLast].v < mid)
+            }
         }
     }
 

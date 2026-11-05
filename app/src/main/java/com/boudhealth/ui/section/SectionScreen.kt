@@ -203,6 +203,10 @@ fun SectionScreen(spec: SectionSpec, nav: Nav, actions: List<HeaderAction> = Sec
 @Composable
 private fun R3Body(ctx: SectionContext, spec: SectionSpec, modifier: Modifier, swipe: Modifier) {
     val gap = if (ctx.wide) R3.GAP else R3.GAP_COVER
+    // plain Text(fontSize = …) would inherit M3 bodyLarge (lineHeight 24 sp, letterSpacing 0.5 sp): app font, natural line height, no tracking
+    // (copy, not merge: merge keeps the inherited lineHeight when the new one is Unspecified)
+    androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(
+        fontFamily = com.boudhealth.ui.theme.AppFont.family, lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified, letterSpacing = androidx.compose.ui.unit.TextUnit(0f, androidx.compose.ui.unit.TextUnitType.Sp))) {
     Column(modifier.fillMaxWidth()) {
         val h = spec.heroHeightR3(ctx)
         HBCard(swipe.fillMaxWidth().then(if (h != null) Modifier.height(h) else Modifier), shape = androidx.compose.foundation.shape.RoundedCornerShape(R3.HERO_RADIUS),
@@ -216,6 +220,7 @@ private fun R3Body(ctx: SectionContext, spec: SectionSpec, modifier: Modifier, s
         }
         Spacer(Modifier.height(gap))
         R3CardHost(ctx, spec.cards)
+    }
     }
 }
 

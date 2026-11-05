@@ -29,6 +29,22 @@ Then open Health BB → **Allow** → in Health Connect switch on all items, inc
 
 Set the app's battery usage to *Unrestricted* if background refresh (every 30 minutes) should run on time.
 
+## Optional: Google Health connection (VO₂ max)
+
+Google Health shows VO₂ max but does not write it to Health Connect. Health BB can read it directly from the
+[Google Health API](https://developers.google.com/health) (read-only, on the phone, no server). Nothing goes online
+unless you connect it in Settings → Data & sync → Google Health.
+
+To use it you need your own Google Cloud project (free, no billing account):
+
+1. Create a project, enable the **Google Health API**.
+2. Google Auth Platform: Branding (app name + your e-mail), Audience **External**, add yourself as **test user**.
+3. Data Access: add `userinfo.email`, `googlehealth.health_metrics_and_measurements.readonly`, `googlehealth.activity_and_fitness.readonly`.
+4. Clients → **Android** client with package `com.boudhealth` (or your own applicationId) and the SHA-1 of the key you sign with
+   (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`).
+
+No client ID or secret goes into the code. In Testing mode Google asks you to reconnect every 7 days; the app shows a notification.
+
 ## Project
 
 See `HANDOVER.md` for the architecture, conventions and the backlog.

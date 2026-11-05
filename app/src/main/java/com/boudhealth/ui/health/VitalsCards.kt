@@ -1,6 +1,16 @@
 package com.boudhealth.ui.health
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,7 +50,6 @@ import com.boudhealth.ui.section.GhostStyle
 import com.boudhealth.ui.section.MRow
 import com.boudhealth.ui.section.R3CardFrame
 import com.boudhealth.ui.section.R3Texts
-import com.boudhealth.ui.section.RailCells
 import com.boudhealth.ui.section.ScrubState
 import com.boudhealth.ui.section.SectionContext
 import com.boudhealth.ui.section.StatCell
@@ -178,7 +187,7 @@ internal fun DrawScope.vFrame(ink: VInk, x: Float, y: Float, w: Float, h: Float,
         val ty = p.Y(t)
         if (ty < p.y - 1 || ty > p.base + 1) continue
         if (abs(ty - p.base) > 1) drawLine(ink.grid.copy(alpha = if (ink.dark) 0.45f else 0.9f), Offset(p.x, ty), Offset(p.x + p.w, ty), u(0.6))
-        textMid(ink, R3Texts.dec(t, if (dec > 0 && t % 1.0 != 0.0) dec else 0), p.x + p.w + u(4), ty, 9.5f, ink.muted.copy(alpha = 0.85f), FontWeight.Normal)
+        textMid(ink, R3Texts.dec(t, if (dec > 0 && t % 1.0 != 0.0) dec else 0), p.x + p.w + u(4), ty, 9.5f, ink.muted.copy(alpha = 0.85f), FontWeight.Medium)
     }
     drawLine(ink.grid, Offset(p.x, p.base + u(0.5)), Offset(p.x + p.w, p.base + u(0.5)), u(1))
     return p
@@ -325,9 +334,9 @@ internal fun scrubIndex(s: ScrubState, d: Domain): Int? = s.day?.let { d.indexOf
 // S cards: Resting heart rate · HRV · Breathing rate · Blood oxygen
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** Cover card heights (mock-ups: S 268, Heart rate 326). */
+/** Cover card heights (mock-ups: S 268, Heart rate 326; 334 so the 58 dp stat row keeps its height). */
 private val COVER_S_H = 268.dp
-private val COVER_HR_H = 326.dp
+private val COVER_HR_H = 334.dp
 
 @Composable
 fun VitalCardR3(ctx: SectionContext, id: String) {
@@ -460,7 +469,7 @@ fun HeartRateCardR3(ctx: SectionContext) {
                     HrChart(m, scrub, onTap = { b -> if (!f.dayScope) ctx.drill(b.day) }, modifier = Modifier.weight(1f).fillMaxWidth())
                 }
             },
-            rail = { RailCells(cells, Modifier.fillMaxSize()) },
+            rail = { VitalsRailTiles(cells, Modifier.fillMaxSize()) },
         )
     }
 }
@@ -538,5 +547,31 @@ internal fun HrChart(m: VitalsModel, scrub: ScrubState, onTap: (SeriesBucket) ->
             rows.getOrNull(si)?.let { r -> drawCircle(c, u(3.5), Offset(p.X(si), p.Y(r.hi))); drawCircle(c, u(3.5), Offset(p.X(si), p.Y(r.lo))) }
         }
         vAxisLabels(ink, p, labels, ti, null, ff)
+    }
+}
+
+/**
+ * Heart rate rail (vitals_01 / vitals_07): 3 tile boxes (r 14, gap 8, padding 14 / 12), label row = label left · note
+ * right (11.5/600 muted), value row 18/700 + unit 12 muted.
+ */
+@Composable
+private fun VitalsRailTiles(cells: List<StatCell>, modifier: Modifier) {
+    val hb = LocalHB.current
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        cells.forEach { c ->
+            Column(Modifier.fillMaxWidth().weight(1f).background(hb.colors.tile, RoundedCornerShape(14.dp)).padding(horizontal = 14.dp, vertical = 12.dp)
+                .semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.Center) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(c.label, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f))
+                    if (c.note != null) Text(c.note, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = hb.colors.muted, maxLines = 1,
+                        style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 6.dp))
+                }
+                Text(buildAnnotatedString {
+                    withStyle(SpanStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = hb.colors.text)) { append(c.value) }
+                    if (c.unit != null) withStyle(SpanStyle(fontSize = 12.sp, color = hb.colors.muted)) { append(" ${c.unit}") }
+                }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFeatureSettings = "tnum"))
+            }
+        }
     }
 }
