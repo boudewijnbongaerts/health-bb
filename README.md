@@ -6,12 +6,23 @@ A personal health dashboard for Android. Health BB reads **Health Connect** (whe
 - **Activity**: the period's rings next to a month calendar of daily rings, a Trends strip (change vs the previous period, goals met, records, streaks, bedtimes), and cards for workout minutes, workouts, steps, heart points and zones, sleep, streak, calories burned and VO₂ max. Periods 1D / 1W / 1M / 1Y / All, swipe between them, tap a day to re-scope the whole tab.
 - **Body**: weight with lean/fat composition on one timeline, body fat, lean mass, waist (incl. a Renpho smart tape over Bluetooth) and BMI, targets, and trends built for noisy scales (week-lowest, weeks down, change per month).
 - **Vitals**: resting heart rate next to heart rate, HRV, breathing rate and blood oxygen on one shared timeline, each against the previous period's lowest–highest range.
-- No averages: trends are facts (changes, ranges, records, counts).
+- Trends are facts: changes, ranges, records and counts.
 - **All metrics** list and per-metric pages.
 - **Widgets**: *Health BB* (configurable tiles) and *Health BB · Clock* (rings + clock, several styles).
 - Optional one-time import of an Apple Health export (`export.zip`).
 
 Heart points follow the Fitbit Active Zone Minutes method on heart-rate reserve (fat burn ×1, cardio and peak ×2). The weekly target defaults to 150 (WHO) and can be changed.
+
+<p>
+  <img src="docs/screenshots/activity.jpg" width="49%" alt="Activity tab, month view">
+  <img src="docs/screenshots/body.jpg" width="49%" alt="Body tab, month view">
+</p>
+<p>
+  <img src="docs/screenshots/vitals.jpg" width="49%" alt="Vitals tab, month view">
+  <img src="docs/screenshots/activity-cover.jpg" width="24%" alt="Activity tab on the cover screen">
+</p>
+
+*Design mock-ups of the Activity, Body and Vitals tabs (Fold inner and cover screen) with made-up data.*
 
 ## Disclaimer
 
